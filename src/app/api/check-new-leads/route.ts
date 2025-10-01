@@ -28,11 +28,19 @@ export async function GET(request: NextRequest) {
     console.log('✅ Cron secret verified');
 
     const customers = crmSystem.getAllCustomers();
+    console.log(`📋 Found ${customers.length} total customers`);
+    
     const results = [];
     
     for (const customer of customers) {
+      console.log(`🔍 Checking customer: ${customer.email}`);
+      console.log(`  - Has googleSheetUrl: ${!!customer.googleSheetUrl}`);
+      console.log(`  - Email notifications enabled: ${customer.emailNotifications?.enabled}`);
+      console.log(`  - New leads enabled: ${customer.emailNotifications?.newLeads}`);
+      
       // Skip customers without Google Sheets or without email notifications enabled
       if (!customer.googleSheetUrl || !customer.emailNotifications?.enabled) {
+        console.log(`⏭️  Skipping ${customer.email} - missing requirements`);
         continue;
       }
 
