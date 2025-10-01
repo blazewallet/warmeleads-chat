@@ -1877,9 +1877,9 @@ export default function CustomerLeadsPage() {
                           <div className="flex items-start space-x-3">
                             <BellIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                             <div className="text-sm text-blue-800">
-                              <p className="font-medium mb-1">Automatische monitoring actief</p>
+                              <p className="font-medium mb-1">⚡ Real-time monitoring actief</p>
                               <p className="text-blue-700">
-                                We controleren elke dag om 8:00 automatisch of er nieuwe leads in je Google Sheet staan en sturen direct een email naar <strong>{user?.email}</strong> als er nieuwe leads zijn.
+                                We controleren <strong>elke 5 minuten</strong> automatisch of er nieuwe leads in je Google Sheet staan en sturen direct een email naar <strong>{user?.email}</strong> voor elke nieuwe lead die binnenkomt.
                               </p>
                             </div>
                           </div>
