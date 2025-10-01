@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WarmeLeads Chat Website
 
-## Getting Started
+## 🚀 Snelle Start
 
-First, run the development server:
-
+### Optie 1: Normale server (kan crashen)
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Optie 2: Stabiele server met auto-restart ⭐
+```bash
+npm run dev:stable
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📍 Website URL
+- **Lokale ontwikkeling:** http://localhost:3000
+- **Productie:** https://warmeleads.eu
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🔧 Server Problemen Oplossen
 
-## Learn More
+### Als je "connection refused" krijgt:
 
-To learn more about Next.js, take a look at the following resources:
+1. **Stop alle servers:**
+   ```bash
+   pkill -f "next dev"
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. **Start stabiele server:**
+   ```bash
+   npm run dev:stable
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. **Of start handmatig:**
+   ```bash
+   npm run dev
+   ```
 
-## Deploy on Vercel
+### Server logs bekijken:
+```bash
+tail -f server.log
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🎯 Demo Account
+- **Email:** demo@warmeleads.nl
+- **Wachtwoord:** demo123
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Technische Details
+- **Framework:** Next.js 14.2.32
+- **Styling:** Tailwind CSS 3.4.17
+- **State Management:** Zustand
+- **Authentication:** Custom auth store
+- **Payment:** Stripe integration
+
+## 📁 Belangrijke Bestanden
+- `src/app/page.tsx` - Hoofdpagina
+- `src/components/ChatInterface.tsx` - Chat interface
+- `src/lib/auth.ts` - Authenticatie store
+- `start-server.sh` - Auto-restart script
+
+## 🚨 Troubleshooting
+
+### Server crasht steeds:
+1. Gebruik `npm run dev:stable` in plaats van `npm run dev`
+2. Check `server.log` voor errors
+3. Herstart met `./start-server.sh`
+
+### TypeScript errors:
+1. Run `npm run build` om errors te vinden
+2. Fix alle type errors
+3. Start server opnieuw
+
+### Port 3000 is bezet:
+1. Stop alle servers: `pkill -f "next dev"`
+2. Start opnieuw: `npm run dev:stable`

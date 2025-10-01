@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WarmeLeads Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .log { background: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>🚨 WarmeLeads Debug Test</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Console Logging</h2>
+        <button onclick="testConsoleLog()">Test Console Log</button>
+        <div id="console-log" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: LocalStorage Context</h2>
+        <button onclick="setContext('quality')">Set Context: quality</button>
+        <button onclick="setContext('faq')">Set Context: faq</button>
+        <button onclick="setContext('info')">Set Context: info</button>
+        <button onclick="getContext()">Get Context</button>
+        <div id="context-log" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 3: Simulate Chat Entry</h2>
+        <button onclick="simulateChatEntry('quality')">Simulate Quality Chat</button>
+        <button onclick="simulateChatEntry('faq')">Simulate FAQ Chat</button>
+        <div id="chat-log" class="log"></div>
+    </div>
+
+    <script>
+        function testConsoleLog() {
+            console.log('🚨 TEST: Console logging werkt!');
+            console.log('🚨 TEST: entryPoint:', 'quality');
+            console.log('🚨 TEST: localStorage test');
+            
+            document.getElementById('console-log').innerHTML = 
+                '<strong>✅ Console logs verstuurd! Check browser console (F12)</strong>';
+        }
+        
+        function setContext(context) {
+            localStorage.setItem('warmeleads_chat_context', context);
+            console.log('🚨 TEST: Context opgeslagen:', context);
+            document.getElementById('context-log').innerHTML = 
+                `<strong>✅ Context opgeslagen: ${context}</strong><br>
+                 localStorage warmeleads_chat_context: ${localStorage.getItem('warmeleads_chat_context')}`;
+        }
+        
+        function getContext() {
+            const context = localStorage.getItem('warmeleads_chat_context') || 'geen context';
+            console.log('🚨 TEST: Context opgehaald:', context);
+            document.getElementById('context-log').innerHTML = 
+                `<strong>✅ Context opgehaald: ${context}</strong>`;
+        }
+        
+        function simulateChatEntry(context) {
+            console.log('🚨 TEST: Simuleer chat entry met context:', context);
+            
+            // Simuleer de exacte flow uit de echte app
+            localStorage.setItem('warmeleads_chat_context', context);
+            
+            const chatLog = document.getElementById('chat-log');
+            chatLog.innerHTML = `
+                <strong>🚨 SIMULATIE CHAT ENTRY:</strong><br>
+                1. Context opgeslagen: ${context}<br>
+                2. localStorage warmeleads_chat_context: ${localStorage.getItem('warmeleads_chat_context')}<br>
+                3. ChatInterface zou entryPoint moeten krijgen: ${context}<br>
+                4. Lisa zou moeten starten met context-specifiek bericht<br>
+                <br>
+                <strong>Check browser console voor alle 🚨 logs!</strong>
+            `;
+        }
+        
+        // Auto-test bij laden
+        window.onload = function() {
+            console.log('🚨 TEST: Pagina geladen');
+            console.log('🚨 TEST: Huidige localStorage:', Object.keys(localStorage));
+            console.log('🚨 TEST: warmeleads_chat_context:', localStorage.getItem('warmeleads_chat_context'));
+        };
+    </script>
+</body>
+</html>

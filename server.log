@@ -1,0 +1,42 @@
+
+> warmeleads-chat@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.32
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1534ms
+ ○ Compiling / ...
+ ✓ Compiled / in 5.4s (2595 modules)
+ GET / 200 in 5601ms
+ ✓ Compiled in 284ms (1284 modules)
+ GET / 200 in 26ms
+ ✓ Compiled /_not-found in 407ms (2566 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 482ms
+ ✓ Compiled /favicon.ico in 267ms (1326 modules)
+ GET /favicon.ico 200 in 327ms
+ ✓ Compiled in 899ms (2577 modules)
+ ✓ Compiled /favicon.ico in 113ms (1325 modules)
+ GET /favicon.ico 200 in 167ms
+ ✓ Compiled in 828ms (2595 modules)
+ ✓ Compiled in 287ms (2595 modules)
+[?25h
+
+> warmeleads-chat@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.32
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1757ms
+ ○ Compiling / ...
+ ✓ Compiled / in 5.3s (2595 modules)
+ GET / 200 in 5499ms
+ ✓ Compiled in 269ms (1284 modules)
+ GET / 200 in 24ms
+ ✓ Compiled /favicon.ico in 316ms (1325 modules)
+ GET /favicon.ico 200 in 397ms
+ GET / 200 in 122ms
+[?25h

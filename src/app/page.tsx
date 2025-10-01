@@ -1,103 +1,210 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { ChatInterface } from '@/components/ChatInterface';
+import { LandingPage } from '@/components/LandingPage';
+import { InfoJourney } from '@/components/InfoJourney';
+import { SmartFAQ } from '@/components/SmartFAQ';
+import { CustomerPortal } from '@/components/CustomerPortal';
+import { LoginForm } from '@/components/LoginForm';
+import { GuestLogin } from '@/components/GuestLogin';
+import { AccountCreation } from '@/components/AccountCreation';
+import { PWAInstaller } from '@/components/PWAInstaller';
+import { useAuthStore } from '@/lib/auth';
+import { ChatContextManager, type ChatContext } from '@/lib/chatContext';
+
+type PageState = 'landing' | 'chat' | 'info' | 'faq' | 'customer' | 'login' | 'guest' | 'account-creation';
+
+export default function HomePage() {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [currentPage, setCurrentPage] = useState<PageState>('landing');
+  const { user, isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    setIsLoaded(true);
+    
+    // Check for URL parameters to set chat context
+    const urlParams = new URLSearchParams(window.location.search);
+    const chatParam = urlParams.get('chat');
+    
+    if (chatParam === 'roi') {
+      // Set ROI context and go to chat
+      ChatContextManager.setContext({ userIntent: 'roi' });
+      setCurrentPage('chat');
+    }
+  }, []);
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          className="flex flex-col items-center space-y-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          {/* Loading Logo */}
+          <motion.div
+            className="w-16 h-16 bg-lisa-gradient rounded-full flex items-center justify-center"
+            animate={{
+              rotate: 360,
+              scale: [1, 1.1, 1],
+            }}
+            transition={{
+              rotate: {
+                duration: 2,
+                repeat: Infinity,
+                ease: 'linear',
+              },
+              scale: {
+                duration: 1,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              },
+            }}
+          >
+            <span className="text-white font-bold text-2xl">W</span>
+          </motion.div>
+
+          {/* Loading Text */}
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <h2 className="text-white text-xl font-semibold mb-2">WarmeLeads</h2>
+            <p className="text-white/80">Lisa wordt voor u klaargemaakt...</p>
+          </motion.div>
+
+          {/* Loading Dots */}
+          <div className="flex space-x-1">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                className="w-2 h-2 bg-brand-pink rounded-full"
+                animate={{
+                  y: [0, -10, 0],
+                }}
+                transition={{
+                  duration: 0.6,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                  delay: i * 0.1,
+                }}
+              />
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const handlePathSelect = (path: 'direct' | 'learn' | 'questions' | 'customer') => {
+    switch (path) {
+      case 'direct':
+        // Set correct context for direct leads ordering
+        ChatContextManager.setContext({ entryPoint: 'direct' });
+        setCurrentPage('chat');
+        break;
+      case 'learn':
+        setCurrentPage('info');
+        break;
+      case 'questions':
+        setCurrentPage('faq');
+        break;
+      case 'customer':
+        if (isAuthenticated) {
+          setCurrentPage('customer');
+        } else {
+          setCurrentPage('login');
+        }
+        break;
+    }
+  };
+
+  const handleLoginSuccess = () => {
+    setCurrentPage('customer');
+  };
+
+  const handleGuestSuccess = () => {
+    setCurrentPage('chat');
+  };
+
+  const handleAccountCreationSuccess = () => {
+    setCurrentPage('customer');
+  };
+
+  const handleBackToHome = () => {
+    setCurrentPage('landing');
+  };
+
+  const handleStartChat = (context?: ChatContext) => {
+    // Store the context for the chat using the new context manager
+    if (context) {
+      ChatContextManager.setContext(context);
+    } else {
+      // Default to direct context if none provided
+      ChatContextManager.setContext({ entryPoint: 'direct' });
+        console.log('Geen context meegegeven, fallback naar direct');
+    }
+    setCurrentPage('chat');
+  };
+
+  const renderCurrentPage = () => {
+    switch (currentPage) {
+      case 'landing':
+        return <LandingPage onPathSelect={handlePathSelect} />;
+      case 'chat':
+        // Get context from the context manager
+        const chatContext = ChatContextManager.getContext();
+        return <ChatInterface entryPoint={chatContext} onBackToHome={handleBackToHome} onShowAccountCreation={() => setCurrentPage('account-creation')} />;
+      case 'info':
+        return <InfoJourney onBackToHome={handleBackToHome} onStartChat={(context: ChatContext) => handleStartChat(context)} />;
+      case 'faq':
+        return <SmartFAQ onBackToHome={handleBackToHome} onStartChat={(context) => handleStartChat(context)} />;
+      case 'customer':
+        return <CustomerPortal onBackToHome={handleBackToHome} onStartChat={() => handleStartChat({ entryPoint: 'direct' })} />;
+      case 'login':
+        return (
+          <LoginForm
+            onBack={handleBackToHome}
+            onSwitchToRegister={() => {/* TODO: Switch to register mode */}}
+            onSwitchToGuest={() => setCurrentPage('guest')}
+            onSuccess={handleLoginSuccess}
+          />
+        );
+      case 'guest':
+        return (
+          <GuestLogin
+            onBack={() => setCurrentPage('login')}
+            onSuccess={handleGuestSuccess}
+          />
+        );
+      case 'account-creation':
+        return (
+          <AccountCreation
+            onSuccess={handleAccountCreationSuccess}
+            onSkip={handleBackToHome}
+          />
+        );
+      default:
+        return <LandingPage onPathSelect={handlePathSelect} />;
+    }
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="min-h-screen">
+      {/* Main Content */}
+      <div className="relative z-10">
+        {renderCurrentPage()}
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      {/* PWA Installer */}
+      <PWAInstaller />
+
+
+    </main>
   );
 }

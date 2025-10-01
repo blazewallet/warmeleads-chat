@@ -1,0 +1,1863 @@
+'use client';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import {
+  ArrowLeftIcon,
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  FunnelIcon,
+  MagnifyingGlassIcon,
+  UserIcon,
+  BuildingOfficeIcon,
+  PhoneIcon,
+  EnvelopeIcon,
+  CurrencyEuroIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  MapPinIcon,
+  DocumentTextIcon,
+  ArrowTopRightOnSquareIcon,
+  ChartBarIcon
+} from '@heroicons/react/24/outline';
+import { useAuthStore } from '@/lib/auth';
+import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
+import { readCustomerLeads, GoogleSheetsService, updateLeadInSheet, addLeadToSheet } from '@/lib/googleSheetsAPI';
+
+export default function CustomerLeadsPage() {
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const [customerData, setCustomerData] = useState<Customer | null>(null);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | Lead['status']>('all');
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [viewingLead, setViewingLead] = useState<Lead | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [leadsPerPage, setLeadsPerPage] = useState(10);
+  
+  // Mobile stats collapse state
+  const [statsExpanded, setStatsExpanded] = useState(false);
+  
+  // Debug logs state
+  const [showDebugLogs, setShowDebugLogs] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  
+  // Debug logging function
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    setDebugLogs(prev => [...prev, logEntry]);
+    console.log(message); // Also log to console
+  };
+  
+  // Force refresh lead data when viewing
+  const handleViewLead = (lead: Lead) => {
+    console.log('🔍 Opening lead details for:', lead.name);
+    console.log('🔍 Lead branchData:', lead.branchData);
+    
+    // Force a fresh copy of the lead with all data
+    const freshLead = leads.find(l => l.id === lead.id) || lead;
+    console.log('🔍 Fresh lead branchData:', freshLead.branchData);
+    
+    setViewingLead(freshLead);
+  };
+
+  // MOBILE DEBUG: Complete auth and data check
+  useEffect(() => {
+    const debugEverything = () => {
+      addDebugLog('🔍 === MOBILE DEBUG START ===');
+      addDebugLog(`🔍 Current state: ${JSON.stringify({
+        authLoading,
+        isAuthenticated,
+        userEmail: user?.email,
+        userName: user?.name,
+        customerData: customerData ? { email: customerData.email, leadCount: customerData.leadData?.length } : null,
+        leadsCount: leads.length,
+        isLoading
+      })}`);
+      
+      // Check all localStorage items
+      try {
+        const authStore = localStorage.getItem('warmeleads-auth-store');
+        const adminToken = localStorage.getItem('warmeleads_admin_token');
+        const crmData = localStorage.getItem('warmeleads_crm_data');
+        
+        addDebugLog(`🔍 localStorage check: ${JSON.stringify({
+          hasAuthStore: !!authStore,
+          hasAdminToken: !!adminToken,
+          hasCrmData: !!crmData,
+          authStoreContent: authStore ? JSON.parse(authStore) : null,
+          adminTokenContent: adminToken,
+          crmDataSize: crmData ? crmData.length : 0
+        })}`);
+        
+        // Check CRM data
+        if (crmData) {
+          const parsed = JSON.parse(crmData);
+          addDebugLog(`🔍 CRM data: ${JSON.stringify({
+            customerCount: parsed.customers?.length || 0,
+            customerEmails: parsed.customers?.map(([id, customer]: [string, any]) => customer.email) || []
+          })}`);
+        }
+        
+      } catch (error) {
+        addDebugLog(`❌ localStorage error: ${error}`);
+      }
+      
+      // Check if we should redirect
+      let hasValidAuth = false;
+      
+      if (isAuthenticated && user?.email) {
+        hasValidAuth = true;
+        addDebugLog('✅ Auth via Zustand');
+      }
+      
+      try {
+        const adminToken = localStorage.getItem('warmeleads_admin_token');
+        if (adminToken === 'admin_authenticated') {
+          hasValidAuth = true;
+          addDebugLog('✅ Auth via admin token');
+        }
+        
+        const authStore = localStorage.getItem('warmeleads-auth-store');
+        if (authStore) {
+          const parsed = JSON.parse(authStore);
+          if (parsed.state?.isAuthenticated && parsed.state?.user?.email) {
+            hasValidAuth = true;
+            addDebugLog('✅ Auth via localStorage');
+          }
+        }
+      } catch (error) {
+        addDebugLog(`❌ Auth check error: ${error}`);
+      }
+      
+      if (!hasValidAuth) {
+        addDebugLog('🚨 NO AUTH - redirecting to home');
+        router.replace('/');
+      } else {
+        addDebugLog('✅ AUTH OK - staying on page');
+      }
+      
+      addDebugLog('🔍 === MOBILE DEBUG END ===');
+    };
+    
+    const timer = setTimeout(debugEverything, 1000);
+    return () => clearTimeout(timer);
+  }, [router, authLoading, isAuthenticated, user, customerData, leads, isLoading]);
+
+  // Load customer data and leads - SIMPLE and CORRECT approach
+  useEffect(() => {
+    const loadCustomerData = () => {
+      console.log('🔄 Loading customer data...');
+      console.log('User from Zustand:', user);
+      
+      if (user?.email) {
+        console.log('✅ Found user email:', user.email);
+        const customers = crmSystem.getAllCustomers();
+        console.log('📊 All customers:', customers.map(c => ({ email: c.email, leadCount: c.leadData?.length || 0 })));
+        
+        const customer = customers.find(c => c.email === user.email);
+        
+        if (customer) {
+          console.log('✅ Found customer data:', {
+            email: customer.email,
+            leadCount: customer.leadData?.length || 0,
+            hasGoogleSheet: !!customer.googleSheetUrl
+          });
+          setCustomerData(customer);
+          setLeads(customer.leadData || []);
+        } else {
+          console.log('❌ No customer found for email:', user.email);
+        }
+      } else {
+        console.log('❌ No user email found');
+      }
+      
+      setIsLoading(false);
+    };
+    
+    // Small delay to ensure Zustand store is hydrated
+    const timer = setTimeout(loadCustomerData, 200);
+    return () => clearTimeout(timer);
+  }, [user]);
+
+  // EMERGENCY MOBILE FIX: Force load data immediately and always
+  useEffect(() => {
+    const emergencyLoad = async () => {
+      addDebugLog('🚨 EMERGENCY LOAD: Starting emergency data load...');
+      
+      try {
+        // Try to get user email from any source
+        let userEmail = user?.email;
+        
+        if (!userEmail) {
+          const authStore = localStorage.getItem('warmeleads-auth-store');
+          if (authStore) {
+            const parsed = JSON.parse(authStore);
+            userEmail = parsed.state?.user?.email;
+          }
+        }
+        
+        if (!userEmail) {
+          const adminToken = localStorage.getItem('warmeleads_admin_token');
+          if (adminToken === 'admin_authenticated') {
+            userEmail = 'rick@warmeleads.eu';
+          }
+        }
+        
+        addDebugLog(`🚨 EMERGENCY: User email: ${userEmail}`);
+        
+        if (userEmail) {
+          // First, try to load CRM data from localStorage
+          addDebugLog('🚨 EMERGENCY: Loading CRM data from localStorage...');
+          // Note: loadFromStorage is called automatically by crmSystem
+          
+          // Get customer data
+          const customers = crmSystem.getAllCustomers();
+          addDebugLog(`🚨 EMERGENCY: Found ${customers.length} customers in CRM`);
+          
+          const customer = customers.find(c => c.email === userEmail);
+          
+          addDebugLog(`🚨 EMERGENCY: Customer found: ${!!customer}`);
+          addDebugLog(`🚨 EMERGENCY: Customer has Google Sheet: ${!!customer?.googleSheetUrl}`);
+          
+          if (customer && customer.googleSheetUrl) {
+            addDebugLog('🚨 EMERGENCY: Loading from Google Sheets...');
+            
+            // Force load from Google Sheets
+            const sheetLeads = await readCustomerLeads(customer.googleSheetUrl);
+            addDebugLog(`🚨 EMERGENCY: Found ${sheetLeads.length} leads in sheets`);
+            
+            // ALWAYS set the leads, even if empty
+            setLeads(sheetLeads);
+            setCustomerData(customer);
+            
+            if (sheetLeads.length > 0) {
+              addDebugLog(`🚨 EMERGENCY: SUCCESS! Loaded ${sheetLeads.length} leads`);
+            } else {
+              addDebugLog('🚨 EMERGENCY: No leads found in sheets, but customer data set');
+            }
+          } else {
+            addDebugLog('🚨 EMERGENCY: No customer or no Google Sheet URL');
+            
+            // If no customer found, try to get Google Sheets URL from server
+            addDebugLog('🚨 EMERGENCY: No customer found, trying to get Google Sheets URL from server...');
+            
+            try {
+              const response = await fetch(`/api/sheets-config?email=${encodeURIComponent(userEmail)}`);
+              const data = await response.json();
+              
+              addDebugLog(`🚨 EMERGENCY: Server response: ${JSON.stringify(data)}`);
+              
+              if (data.success && data.googleSheetUrl) {
+                addDebugLog(`🚨 EMERGENCY: Found Google Sheets URL from server: ${data.googleSheetUrl}`);
+                
+                // Create customer with server-provided Google Sheets URL
+                const newCustomer: Omit<Customer, 'id'> = {
+                  name: user?.name || 'Unknown',
+                  email: userEmail,
+                  company: user?.company || '',
+                  phone: user?.phone || '',
+                  googleSheetUrl: data.googleSheetUrl,
+                  leadData: [],
+                  createdAt: new Date(),
+                  lastActivity: new Date(),
+                  status: 'customer',
+                  source: 'direct',
+                  chatHistory: [],
+                  orders: [],
+                  openInvoices: [],
+                  dataHistory: [],
+                  hasAccount: true,
+                  accountCreatedAt: new Date()
+                };
+                
+                // Create customer manually in localStorage
+                const customerId = `customer_${Date.now()}`;
+                const createdCustomer: Customer = {
+                  id: customerId,
+                  ...newCustomer
+                };
+                
+                // Add to CRM system
+                const existingData = crmSystem.getAllCustomers();
+                const updatedData = [...existingData, createdCustomer];
+                
+                // Save to localStorage
+                localStorage.setItem('warmeleads_crm_data', JSON.stringify({
+                  customers: updatedData.map(c => [c.id, c])
+                }));
+                addDebugLog(`🚨 EMERGENCY: Created customer: ${createdCustomer.id}`);
+                
+                // Now try to load leads from Google Sheets
+                if (createdCustomer.googleSheetUrl) {
+                  addDebugLog('🚨 EMERGENCY: Loading leads for new customer...');
+                  const sheetLeads = await readCustomerLeads(createdCustomer.googleSheetUrl);
+                  addDebugLog(`🚨 EMERGENCY: Found ${sheetLeads.length} leads in sheets`);
+                  
+                  // ALWAYS set the leads, even if empty
+                  setLeads(sheetLeads);
+                  setCustomerData(createdCustomer);
+                  
+                  if (sheetLeads.length > 0) {
+                    addDebugLog(`🚨 EMERGENCY: SUCCESS! Loaded ${sheetLeads.length} leads for new customer`);
+                  } else {
+                    addDebugLog('🚨 EMERGENCY: No leads found in Google Sheets, but customer data set');
+                  }
+                }
+              } else {
+                addDebugLog('🚨 EMERGENCY: No Google Sheets URL found on server for this email');
+                addDebugLog('🚨 EMERGENCY: Please configure Google Sheets URL in admin settings');
+              }
+            } catch (error) {
+              addDebugLog(`🚨 EMERGENCY: Error fetching from server: ${error}`);
+            }
+          }
+        } else {
+          addDebugLog('🚨 EMERGENCY: No user email found');
+        }
+        
+      } catch (error) {
+        addDebugLog(`🚨 EMERGENCY: Error: ${error}`);
+      }
+    };
+    
+    // Run emergency load immediately and also after a short delay to ensure it runs
+    emergencyLoad();
+    const timer = setTimeout(emergencyLoad, 1000);
+    return () => clearTimeout(timer);
+  }, [user]);
+
+  // FORCE CACHE BUST: Add version parameter to prevent caching
+  useEffect(() => {
+    const currentTime = Date.now();
+    addDebugLog(`🚨 CACHE BUST: Page loaded at ${new Date(currentTime).toLocaleString()}`);
+    
+    // Force reload if this is a cached version
+    const lastLoad = localStorage.getItem('warmeleads_last_load');
+    if (lastLoad && (currentTime - parseInt(lastLoad)) < 5000) {
+      addDebugLog('🚨 CACHE BUST: Detected recent load, forcing refresh...');
+      window.location.reload();
+    }
+    
+    localStorage.setItem('warmeleads_last_load', currentTime.toString());
+  }, []);
+
+  // Filter, sort and paginate leads
+  const { filteredLeads, totalPages, paginatedLeads } = useMemo(() => {
+    // Filter leads
+    const filtered = leads.filter(lead => {
+      const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.interest.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filterStatus === 'all' || lead.status === filterStatus;
+      
+      return matchesSearch && matchesFilter;
+    });
+    
+    // Sort by date (most recent first)
+    const sorted = filtered.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA; // Most recent first
+    });
+    
+    // Calculate pagination
+    const total = Math.ceil(sorted.length / leadsPerPage);
+    const startIndex = (currentPage - 1) * leadsPerPage;
+    const endIndex = startIndex + leadsPerPage;
+    const paginated = sorted.slice(startIndex, endIndex);
+    
+    return {
+      filteredLeads: sorted,
+      totalPages: total,
+      paginatedLeads: paginated
+    };
+  }, [leads, searchTerm, filterStatus, currentPage, leadsPerPage]);
+
+  // Calculate statistics based on filtered leads
+  const stats = {
+    total: filteredLeads.length,
+    new: filteredLeads.filter(l => l.status === 'new').length,
+    contacted: filteredLeads.filter(l => l.status === 'contacted').length,
+    qualified: filteredLeads.filter(l => l.status === 'qualified').length,
+    converted: filteredLeads.filter(l => l.status === 'converted').length,
+    lost: leads.filter(l => l.status === 'lost').length,
+    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted').length / leads.length * 100) : 0
+  };
+
+  const getStatusColor = (status: Lead['status']) => {
+    switch (status) {
+      case 'new': return 'bg-blue-100 text-blue-800';
+      case 'contacted': return 'bg-yellow-100 text-yellow-800';
+      case 'qualified': return 'bg-purple-100 text-purple-800';
+      case 'converted': return 'bg-green-100 text-green-800';
+      case 'lost': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusIcon = (status: Lead['status']) => {
+    switch (status) {
+      case 'new': return '🆕';
+      case 'contacted': return '📞';
+      case 'qualified': return '⭐';
+      case 'converted': return '✅';
+      case 'lost': return '❌';
+      default: return '❓';
+    }
+  };
+
+  const handleUpdateLeadStatus = (leadId: string, newStatus: Lead['status']) => {
+    if (customerData) {
+      const success = crmSystem.updateCustomerLead(customerData.id, leadId, { status: newStatus });
+      if (success) {
+        setLeads(prev => prev.map(lead => 
+          lead.id === leadId ? { ...lead, status: newStatus, updatedAt: new Date() } : lead
+        ));
+      }
+    }
+  };
+
+  const handleDeleteLead = async (lead: Lead) => {
+    if (!confirm(`Weet je zeker dat je "${lead.name}" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.`)) {
+      return;
+    }
+
+    try {
+      if (customerData) {
+        const success = crmSystem.removeLeadFromCustomer(customerData.id, lead.id);
+        if (success) {
+          // Direct update UI
+          setLeads(prevLeads => prevLeads.filter(l => l.id !== lead.id));
+          
+          // Update customer data
+          const updatedCustomer = crmSystem.getCustomerById(customerData.id);
+          if (updatedCustomer) {
+            setCustomerData(updatedCustomer);
+          }
+          
+          console.log(`🗑️ Lead "${lead.name}" succesvol verwijderd`);
+        } else {
+          alert('❌ Fout bij verwijderen van lead');
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting lead:', error);
+      alert('❌ Fout bij verwijderen van lead');
+    }
+  };
+
+  // Full sync (manual only)
+  const syncWithGoogleSheets = async () => {
+    if (!customerData?.googleSheetUrl) {
+      alert('❌ Geen Google Sheets URL gekoppeld');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+            console.log('🔄 Starting real Google Sheets sync...');
+            
+            // Extract spreadsheet ID from URL
+            const spreadsheetId = GoogleSheetsService.extractSpreadsheetId(customerData.googleSheetUrl);
+            if (!spreadsheetId) {
+              throw new Error('Ongeldige Google Sheets URL');
+            }
+
+            // CRITICAL: Clear existing leads from CRM FIRST
+            console.log('🗑️ Clearing existing leads from CRM...');
+            customerData.leadData = [];
+            
+            // Also clear from localStorage to force refresh
+            const crmData = JSON.parse(localStorage.getItem('warmeleads_crm_data') || '{}');
+            if (crmData.customers) {
+              const customerEntry = crmData.customers.find(([id]: [string, any]) => id === customerData.id);
+              if (customerEntry) {
+                customerEntry[1].leadData = [];
+                localStorage.setItem('warmeleads_crm_data', JSON.stringify(crmData));
+                console.log('🗑️ Cleared leads from localStorage');
+              }
+            }
+
+            // Read actual data from Google Sheets
+            const realLeads = await readCustomerLeads(customerData.googleSheetUrl);
+            
+            console.log('📊 Real leads loaded from Google Sheets:', realLeads.length);
+
+      // Add each lead from the sheet to the customer
+      for (const leadData of realLeads) {
+        console.log(`🔧 Processing lead ${leadData.name} with branchData:`, leadData.branchData);
+        
+        const leadToAdd: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'> = {
+          name: leadData.name,
+          email: leadData.email,
+          phone: leadData.phone,
+          company: leadData.company,
+          address: leadData.address,
+          city: leadData.city,
+          interest: leadData.interest,
+          budget: leadData.budget,
+          timeline: leadData.timeline,
+          notes: leadData.notes,
+          status: leadData.status,
+          assignedTo: leadData.assignedTo,
+          source: 'import',
+          sheetRowNumber: leadData.sheetRowNumber,
+          branchData: leadData.branchData // CRITICAL: Include branchData!
+        };
+        
+        console.log(`🔧 leadToAdd with branchData:`, leadToAdd.branchData);
+        
+        crmSystem.addLeadToCustomer(customerData.id, leadToAdd);
+      }
+
+            // Refresh data
+            const updatedCustomer = crmSystem.getCustomerById(customerData.id);
+            if (updatedCustomer) {
+              setCustomerData(updatedCustomer);
+              setLeads(updatedCustomer.leadData || []);
+              
+              // Debug: Check what's actually in the leads
+              console.log('🔍 First 3 leads after sync:', updatedCustomer.leadData?.slice(0, 3).map(lead => ({
+                name: lead.name,
+                branchData: lead.branchData,
+                notes: lead.notes,
+                hasZonnepanelen: !!lead.branchData?.zonnepanelen,
+                hasStroomverbruik: !!lead.branchData?.stroomverbruik,
+                hasRedenThuisbatterij: !!lead.branchData?.redenThuisbatterij
+              })));
+              
+              // Also check what's in the state
+              console.log('🔍 State leads sample:', updatedCustomer.leadData?.slice(0, 2));
+            }
+
+            alert(`✅ ${realLeads.length} echte leads gesynchroniseerd met Google Sheets!`);
+    } catch (error) {
+      console.error('Sync error:', error);
+      
+      // Provide helpful error messages
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          alert('❌ Google Sheets API key niet geconfigureerd. Neem contact op met support.');
+        } else if (error.message.includes('permission') || error.message.includes('403')) {
+          alert('❌ Geen toegang tot spreadsheet. Zorg dat de sheet publiek toegankelijk is of deel met onze service account.');
+        } else if (error.message.includes('404')) {
+          alert('❌ Spreadsheet niet gevonden. Controleer de URL.');
+        } else {
+          alert(`❌ Fout bij synchroniseren: ${error.message}`);
+        }
+      } else {
+        alert('❌ Onbekende fout bij synchroniseren met Google Sheets');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Show loading while auth is loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-brand-purple to-brand-pink flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl">Authenticatie controleren...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render anything if not authenticated (redirect will happen)
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-brand-purple to-brand-pink flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl">Leads laden...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-brand-purple to-brand-pink">
+      {/* Header */}
+      <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-6">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => router.back()}
+                className="flex items-center space-x-2 text-white/80 hover:text-white transition-colors"
+              >
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Terug naar account</span>
+              </button>
+              
+              <div className="h-6 w-px bg-white/30"></div>
+              
+              <div>
+                <h1 className="text-2xl font-bold text-white">Mijn Leads</h1>
+                <p className="text-white/70">
+                  {user?.name} • {leads.length} leads totaal
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* Sync Google Sheets button removed per user request */}
+              
+              {/* Debug button for mobile */}
+              <button
+                onClick={() => setShowDebugLogs(true)}
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3 py-2 rounded-lg text-sm transition-colors"
+                title="Show debug logs"
+              >
+                🐛
+              </button>
+              
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <PlusIcon className="w-4 h-4" />
+                <span>Nieuwe lead</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+         {/* Statistics - Responsive Collapsible */}
+         <motion.div
+           initial={{ opacity: 0, y: 20 }}
+           animate={{ opacity: 1, y: 0 }}
+           transition={{ delay: 0.4 }}
+           className="mb-8"
+         >
+           {/* Mobile Collapsible Stats */}
+           <div className="md:hidden">
+             <motion.div
+               className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden"
+             >
+               {/* Collapsed Header */}
+               <div 
+                 className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                 onClick={() => setStatsExpanded(!statsExpanded)}
+               >
+                 <div className="flex items-center justify-between">
+                   <div className="flex items-center space-x-3">
+                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                       <ChartBarIcon className="w-6 h-6 text-white" />
+                     </div>
+                     <div>
+                       <h3 className="text-lg font-bold text-gray-900">{stats.total} Leads</h3>
+                       <p className="text-sm text-gray-600">{stats.new} nieuw • {stats.converted} geconverteerd</p>
+                     </div>
+                   </div>
+                   <div className="flex items-center space-x-2">
+                     <span className="text-xs text-purple-600 font-medium">
+                       {statsExpanded ? 'Inklappen' : 'Uitklappen'}
+                     </span>
+                     <motion.div
+                       animate={{ rotate: statsExpanded ? 180 : 0 }}
+                       transition={{ duration: 0.2 }}
+                     >
+                       <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                       </svg>
+                     </motion.div>
+                   </div>
+                 </div>
+               </div>
+               
+               {/* Expanded Content */}
+               <AnimatePresence>
+                 {statsExpanded && (
+                   <motion.div
+                     initial={{ height: 0, opacity: 0 }}
+                     animate={{ height: 'auto', opacity: 1 }}
+                     exit={{ height: 0, opacity: 0 }}
+                     transition={{ duration: 0.3 }}
+                     className="border-t border-gray-100"
+                   >
+                     <div className="p-4 grid grid-cols-2 gap-4">
+                       <div className="text-center p-3 bg-yellow-50 rounded-xl">
+                         <div className="text-2xl font-bold text-yellow-600">{stats.contacted}</div>
+                         <div className="text-xs text-gray-600 mt-1">📞 Gecontacteerd</div>
+                       </div>
+                       <div className="text-center p-3 bg-green-50 rounded-xl">
+                         <div className="text-2xl font-bold text-green-600">{stats.converted}</div>
+                         <div className="text-xs text-gray-600 mt-1">✅ Geconverteerd</div>
+                       </div>
+                       <div className="text-center p-3 bg-purple-50 rounded-xl">
+                         <div className="text-2xl font-bold text-purple-600">{stats.conversionRate.toFixed(1)}%</div>
+                         <div className="text-xs text-gray-600 mt-1">📊 Conversie</div>
+                       </div>
+                       <div className="text-center p-3 bg-red-50 rounded-xl">
+                         <div className="text-2xl font-bold text-red-600">{filteredLeads.filter(l => l.status === 'lost').length}</div>
+                         <div className="text-xs text-gray-600 mt-1">❌ Verloren</div>
+                       </div>
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
+             </motion.div>
+           </div>
+
+           {/* Desktop Full Stats */}
+           <div className="hidden md:grid grid-cols-5 gap-6">
+             <motion.div
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
+             >
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm font-medium text-gray-600">Totaal Leads</p>
+                   <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+                 </div>
+                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                   <UserIcon className="w-6 h-6 text-blue-600" />
+                 </div>
+               </div>
+             </motion.div>
+
+             <motion.div
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ delay: 0.1 }}
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
+             >
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm font-medium text-gray-600">Nieuwe</p>
+                   <p className="text-3xl font-bold text-blue-600">{stats.new}</p>
+                 </div>
+                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                   <span className="text-xl">🆕</span>
+                 </div>
+               </div>
+             </motion.div>
+
+             <motion.div
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ delay: 0.2 }}
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
+             >
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm font-medium text-gray-600">Gecontacteerd</p>
+                   <p className="text-3xl font-bold text-yellow-600">{stats.contacted}</p>
+                 </div>
+                 <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+                   <span className="text-xl">📞</span>
+                 </div>
+               </div>
+             </motion.div>
+
+             <motion.div
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ delay: 0.3 }}
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
+             >
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm font-medium text-gray-600">Geconverteerd</p>
+                   <p className="text-3xl font-bold text-green-600">{stats.converted}</p>
+                 </div>
+                 <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                   <span className="text-xl">✅</span>
+                 </div>
+               </div>
+             </motion.div>
+
+             <motion.div
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ delay: 0.4 }}
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
+             >
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm font-medium text-gray-600">Conversie</p>
+                   <p className="text-3xl font-bold text-purple-600">{stats.conversionRate.toFixed(1)}%</p>
+                 </div>
+                 <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                   <ChartBarIcon className="w-6 h-6 text-purple-600" />
+                 </div>
+               </div>
+             </motion.div>
+           </div>
+         </motion.div>
+
+        {/* Google Sheets card completely hidden per user request */}
+
+        {/* Filters */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 mb-8 shadow-lg"
+        >
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Zoek leads op naam, email, bedrijf of interesse..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+              />
+            </div>
+            
+            <div className="relative">
+              <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as any)}
+                className="pl-10 pr-8 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+              >
+                <option value="all">Alle statussen</option>
+                <option value="new">🆕 Nieuw</option>
+                <option value="contacted">📞 Gecontacteerd</option>
+                <option value="qualified">⭐ Gekwalificeerd</option>
+                <option value="converted">✅ Geconverteerd</option>
+                <option value="lost">❌ Verloren</option>
+              </select>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Leads Table */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden"
+        >
+          {paginatedLeads.length === 0 ? (
+            <div className="text-center py-16">
+              <UserIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                {searchTerm || filterStatus !== 'all' ? 'Geen leads gevonden' : 'Nog geen leads'}
+              </h3>
+              <p className="text-gray-600 mb-6">
+                {customerData?.googleSheetUrl 
+                  ? 'Leads worden automatisch geladen vanuit Google Sheets.'
+                  : 'Uw leads verschijnen hier na aankoop en Google Sheets koppeling.'
+                }
+              </p>
+              {/* Sync button removed - emergency load handles everything automatically */}
+            </div>
+          ) : (
+            <>
+              {/* Mobile Card View - Gebruiksvriendelijk */}
+              <div className="md:hidden space-y-3 p-4">
+                {paginatedLeads.map((lead) => (
+                  <motion.div
+                    key={lead.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 cursor-pointer hover:shadow-md transition-all"
+                    onClick={() => handleViewLead(lead)}
+                  >
+                    {/* Header met Avatar en Quick Actions */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                          <span className="text-white font-bold text-xl">
+                            {lead.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-900 text-lg truncate">{lead.name}</h3>
+                          {lead.company && (
+                            <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+                          )}
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className="text-xs text-gray-400">Rij {lead.sheetRowNumber}</span>
+                            <span className="text-xs text-gray-300">•</span>
+                            <span className="text-xs text-gray-400">{new Date(lead.updatedAt).toLocaleDateString('nl-NL')}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex space-x-1 ml-2">
+                        {/* Bellen knop */}
+                        <a
+                          href={`tel:${lead.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-10 h-10 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center transition-colors shadow-sm"
+                          title="Bellen"
+                        >
+                          <PhoneIcon className="w-5 h-5 text-white" />
+                        </a>
+                        
+                        {/* WhatsApp knop */}
+                        <a
+                          href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=Hallo ${lead.name}, ik neem contact met je op via Warmeleads.`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-10 h-10 bg-green-400 hover:bg-green-500 rounded-full flex items-center justify-center transition-colors shadow-sm"
+                          title="WhatsApp"
+                        >
+                          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+                          </svg>
+                        </a>
+                        
+                        {/* Bewerken knop */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingLead(lead);
+                          }}
+                          className="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center transition-colors shadow-sm"
+                          title="Bewerken"
+                        >
+                          <PencilIcon className="w-5 h-5 text-white" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Contact Info - Compact */}
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center text-sm">
+                        <EnvelopeIcon className="w-4 h-4 mr-3 text-blue-500 flex-shrink-0" />
+                        <a 
+                          href={`mailto:${lead.email}`} 
+                          className="text-gray-700 hover:text-blue-600 truncate flex-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {lead.email}
+                        </a>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <PhoneIcon className="w-4 h-4 mr-3 text-green-500 flex-shrink-0" />
+                        <a 
+                          href={`tel:${lead.phone}`} 
+                          className="text-gray-700 hover:text-green-600"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {lead.phone}
+                        </a>
+                      </div>
+                      {lead.branchData?.postcode && (
+                        <div className="flex items-center text-sm text-gray-600">
+                          <MapPinIcon className="w-4 h-4 mr-3 text-purple-500 flex-shrink-0" />
+                          <span>{lead.branchData.postcode} {lead.branchData.huisnummer}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Interest & Budget */}
+                    <div className="mb-4">
+                      <div className="font-medium text-gray-900 mb-2">{lead.interest}</div>
+                      {lead.budget && (
+                        <div className="flex items-center text-sm text-gray-600">
+                          <CurrencyEuroIcon className="w-4 h-4 mr-2 text-yellow-500" />
+                          {lead.budget}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status Badge & Branch Info */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-2">
+                        {lead.branchData?.zonnepanelen && (
+                          <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">
+                            🌞 {lead.branchData.zonnepanelen}
+                          </span>
+                        )}
+                        {lead.branchData?.stroomverbruik && (
+                          <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                            ⚡ {lead.branchData.stroomverbruik}
+                          </span>
+                        )}
+                        {lead.branchData?.koopintentie && (
+                          <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+                            🎯 {lead.branchData.koopintentie}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteLead(lead);
+                          }}
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Verwijderen"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                        <div className="text-xs text-gray-400">
+                          Tik voor details →
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Lead Info
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Contact & Locatie
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Interesse & Budget
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Acties
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedLeads.map((lead) => (
+                    <tr 
+                      key={lead.id} 
+                      className="hover:bg-gray-50 cursor-pointer" 
+                      onClick={() => handleViewLead(lead)}
+                      title="Klik voor lead details"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                            <span className="text-white font-bold">
+                              {lead.name.charAt(0)}
+                            </span>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-bold text-gray-900">
+                              {lead.name}
+                            </div>
+                            {lead.company && (
+                              <div className="text-sm text-gray-600 flex items-center">
+                                <BuildingOfficeIcon className="w-4 h-4 mr-1" />
+                                {lead.company}
+                              </div>
+                            )}
+                            {lead.sheetRowNumber && (
+                              <div className="text-xs text-gray-400">
+                                Sheet rij: {lead.sheetRowNumber}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <EnvelopeIcon className="w-4 h-4 mr-2" />
+                            <a href={`mailto:${lead.email}`} className="hover:text-brand-purple">
+                              {lead.email}
+                            </a>
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <PhoneIcon className="w-4 h-4 mr-2" />
+                            <a href={`tel:${lead.phone}`} className="hover:text-brand-purple">
+                              {lead.phone}
+                            </a>
+                          </div>
+                          {lead.branchData?.postcode && lead.branchData?.huisnummer && (
+                            <div className="flex items-center text-sm text-gray-600">
+                              <MapPinIcon className="w-4 h-4 mr-2" />
+                              {lead.branchData.postcode} {lead.branchData.huisnummer}
+                            </div>
+                          )}
+                          {lead.branchData?.datumInteresse && (
+                            <div className="text-xs text-gray-500">
+                              Interesse: {lead.branchData.datumInteresse}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-2">
+                          <div className="font-medium text-gray-900">{lead.interest}</div>
+                          {lead.budget && (
+                            <div className="flex items-center text-sm text-gray-600">
+                              <CurrencyEuroIcon className="w-4 h-4 mr-2" />
+                              {lead.budget}
+                            </div>
+                          )}
+                          
+                          {/* Clean table view - branch details only in popup */}
+                          <div className="text-xs text-gray-500 italic">
+                            📋 Klik voor alle thuisbatterij details
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <select
+                          value={lead.status}
+                          onChange={(e) => handleUpdateLeadStatus(lead.id, e.target.value as Lead['status'])}
+                          onClick={(e) => e.stopPropagation()} // Prevent row click
+                          className={`px-3 py-2 text-sm font-medium rounded-lg border-0 ${getStatusColor(lead.status)}`}
+                        >
+                          <option value="new">🆕 Nieuw</option>
+                          <option value="contacted">📞 Gecontacteerd</option>
+                          <option value="qualified">⭐ Gekwalificeerd</option>
+                          <option value="converted">✅ Geconverteerd</option>
+                          <option value="lost">❌ Verloren</option>
+                        </select>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Bijgewerkt: {new Date(lead.updatedAt).toLocaleDateString('nl-NL')}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent row click
+                              setEditingLead(lead);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 transition-colors p-2 hover:bg-blue-50 rounded-lg"
+                            title="Bewerken"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <a
+                            href={`mailto:${lead.email}`}
+                            onClick={(e) => e.stopPropagation()} // Prevent row click
+                            className="text-green-600 hover:text-green-800 transition-colors p-2 hover:bg-green-50 rounded-lg"
+                            title="Email versturen"
+                          >
+                            <EnvelopeIcon className="w-4 h-4" />
+                          </a>
+                          <a
+                            href={`tel:${lead.phone}`}
+                            onClick={(e) => e.stopPropagation()} // Prevent row click
+                            className="text-purple-600 hover:text-purple-800 transition-colors p-2 hover:bg-purple-50 rounded-lg"
+                            title="Bellen"
+                          >
+                            <PhoneIcon className="w-4 h-4" />
+                          </a>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent row click
+                              handleDeleteLead(lead);
+                            }}
+                            className="text-red-600 hover:text-red-800 transition-colors p-2 hover:bg-red-50 rounded-lg"
+                            title="Verwijderen"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+            </>
+          )}
+          
+          {/* Pagination Controls - Responsive */}
+          {filteredLeads.length > 0 && (
+            <div className="px-4 md:px-6 py-4 bg-gray-50 border-t border-gray-200">
+              {/* Mobile Pagination */}
+              <div className="md:hidden space-y-3">
+                <div className="text-center">
+                  <span className="text-sm text-gray-700">
+                    {((currentPage - 1) * leadsPerPage) + 1}-{Math.min(currentPage * leadsPerPage, filteredLeads.length)} van {filteredLeads.length} leads
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-white border border-gray-300 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 font-medium"
+                  >
+                    ← Vorige
+                  </button>
+                  
+                  <span className="px-4 py-2 text-sm font-bold text-purple-600">
+                    {currentPage} / {totalPages}
+                  </span>
+                  
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-white border border-gray-300 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 font-medium"
+                  >
+                    Volgende →
+                  </button>
+                </div>
+                
+                <div className="text-center">
+                  <select
+                    value={leadsPerPage}
+                    onChange={(e) => {
+                      setLeadsPerPage(Number(e.target.value));
+                      setCurrentPage(1); // Reset to first page
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-xl text-sm bg-white font-medium"
+                  >
+                    <option value={10}>📄 10 per pagina</option>
+                    <option value={25}>📄 25 per pagina</option>
+                    <option value={50}>📄 50 per pagina</option>
+                    <option value={100}>📄 100 per pagina</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Desktop Pagination */}
+              <div className="hidden md:flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-700">
+                    Toon {((currentPage - 1) * leadsPerPage) + 1}-{Math.min(currentPage * leadsPerPage, filteredLeads.length)} van {filteredLeads.length} leads
+                  </span>
+                  
+                  <select
+                    value={leadsPerPage}
+                    onChange={(e) => {
+                      setLeadsPerPage(Number(e.target.value));
+                      setCurrentPage(1); // Reset to first page
+                    }}
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value={10}>10 per pagina</option>
+                    <option value={25}>25 per pagina</option>
+                    <option value={50}>50 per pagina</option>
+                    <option value={100}>100 per pagina</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    Vorige
+                  </button>
+                  
+                  <span className="px-3 py-1 text-sm">
+                    Pagina {currentPage} van {totalPages}
+                  </span>
+                  
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    Volgende
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Lead Detail Modal */}
+      <AnimatePresence>
+        {viewingLead && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setViewingLead(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-brand-purple to-brand-pink p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold">{viewingLead.name}</h3>
+                    <p className="text-white/80">Lead Details - Rij {viewingLead.sheetRowNumber}</p>
+                  </div>
+                  <button
+                    onClick={() => setViewingLead(null)}
+                    className="text-white/80 hover:text-white transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Basic Info */}
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <UserIcon className="w-5 h-5 mr-2 text-blue-600" />
+                        Contactgegevens
+                      </h4>
+                      <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+                        <div className="flex items-center">
+                          <EnvelopeIcon className="w-4 h-4 mr-3 text-gray-500" />
+                          <span className="text-gray-900">{viewingLead.email}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <PhoneIcon className="w-4 h-4 mr-3 text-gray-500" />
+                          <span className="text-gray-900">{viewingLead.phone}</span>
+                        </div>
+                        {viewingLead.branchData?.postcode && viewingLead.branchData?.huisnummer && (
+                          <div className="flex items-center">
+                            <MapPinIcon className="w-4 h-4 mr-3 text-gray-500" />
+                            <span className="text-gray-900">{viewingLead.branchData.postcode} {viewingLead.branchData.huisnummer}</span>
+                          </div>
+                        )}
+                        {viewingLead.company && (
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            <span className="text-gray-900">{viewingLead.company}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Interest & Budget */}
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <CurrencyEuroIcon className="w-5 h-5 mr-2 text-green-600" />
+                        Interesse & Budget
+                      </h4>
+                      <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+                        <div>
+                          <span className="text-sm text-gray-500">Interesse:</span>
+                          <p className="font-medium text-gray-900">{viewingLead.interest}</p>
+                        </div>
+                        {viewingLead.budget && (
+                          <div>
+                            <span className="text-sm text-gray-500">Budget:</span>
+                            <p className="font-medium text-gray-900">{viewingLead.budget}</p>
+                          </div>
+                        )}
+                        {viewingLead.branchData?.datumInteresse && (
+                          <div>
+                            <span className="text-sm text-gray-500">Datum interesse:</span>
+                            <p className="font-medium text-gray-900">{viewingLead.branchData.datumInteresse}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Branch-Specific Data */}
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <ChartBarIcon className="w-5 h-5 mr-2 text-purple-600" />
+                        Thuisbatterij Specifiek
+                      </h4>
+                      
+                      
+                      <div className="space-y-4">
+                        {/* Zonnepanelen - FORCE SHOW */}
+                        <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 bg-yellow-400 rounded-full mr-3"></div>
+                            <span className="text-sm font-medium text-gray-700">Zonnepanelen</span>
+                          </div>
+                          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                            {viewingLead.branchData?.zonnepanelen || 'Geen data'}
+                          </span>
+                        </div>
+
+                        {/* Dynamisch Contract - FORCE SHOW */}
+                        <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 bg-blue-400 rounded-full mr-3"></div>
+                            <span className="text-sm font-medium text-gray-700">Dynamisch Contract</span>
+                          </div>
+                          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                            {viewingLead.branchData?.dynamischContract || 'Geen data'}
+                          </span>
+                        </div>
+
+                        {/* Stroomverbruik - FORCE SHOW */}
+                        <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 bg-purple-400 rounded-full mr-3"></div>
+                            <span className="text-sm font-medium text-gray-700">Stroomverbruik</span>
+                          </div>
+                          <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                            {viewingLead.branchData?.stroomverbruik || 'Geen data'} kWh
+                          </span>
+                        </div>
+
+                        {/* Reden Thuisbatterij - FORCE SHOW */}
+                        <div className="p-3 bg-indigo-50 rounded-lg">
+                          <div className="flex items-center mb-2">
+                            <div className="w-3 h-3 bg-indigo-400 rounded-full mr-3"></div>
+                            <span className="text-sm font-medium text-gray-700">Reden Thuisbatterij</span>
+                          </div>
+                          <p className="text-sm text-gray-900 ml-6">{viewingLead.branchData?.redenThuisbatterij || 'Geen data'}</p>
+                        </div>
+
+                        {/* Koopintentie - FORCE SHOW */}
+                        <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 bg-green-400 rounded-full mr-3"></div>
+                            <span className="text-sm font-medium text-gray-700">Koopintentie</span>
+                          </div>
+                          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                            {viewingLead.branchData?.koopintentie || 'Geen data'}
+                          </span>
+                        </div>
+
+                        {/* Nieuwsbrief - FORCE SHOW */}
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 bg-gray-400 rounded-full mr-3"></div>
+                            <span className="text-sm font-medium text-gray-700">Nieuwsbrief</span>
+                          </div>
+                          <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
+                            {viewingLead.branchData?.nieuwsbrief || 'Geen data'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    {viewingLead.notes && (
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <DocumentTextIcon className="w-5 h-5 mr-2 text-orange-600" />
+                          Notities
+                        </h4>
+                        <div className="bg-orange-50 p-4 rounded-lg">
+                          <p className="text-sm text-gray-900 whitespace-pre-wrap">{viewingLead.notes}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3 mt-8 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => setViewingLead(null)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    Sluiten
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingLead(viewingLead);
+                      setViewingLead(null);
+                    }}
+                    className="px-6 py-2 bg-gradient-to-r from-brand-purple to-brand-pink text-white rounded-lg hover:shadow-lg transition-all duration-300"
+                  >
+                    Bewerken
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Lead Edit Modal */}
+      <AnimatePresence>
+        {editingLead && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setEditingLead(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Lead Bewerken</h3>
+                  <button
+                    onClick={() => setEditingLead(null)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-gray-600 mb-4">Bewerk de gegevens van {editingLead.name}</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      value={editingLead.status}
+                      onChange={(e) => {
+                        const newStatus = e.target.value as Lead['status'];
+                        // Update in CRM
+                        if (customerData) {
+                          const success = crmSystem.updateCustomerLead(customerData.id, editingLead.id, { status: newStatus });
+                          if (success) {
+                            // Update local state
+                            setLeads(prev => prev.map(lead => 
+                              lead.id === editingLead.id ? { ...lead, status: newStatus } : lead
+                            ));
+                            setEditingLead({ ...editingLead, status: newStatus });
+                            alert('✅ Status bijgewerkt!');
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                    >
+                      <option value="new">🆕 Nieuw</option>
+                      <option value="contacted">📞 Gecontacteerd</option>
+                      <option value="qualified">⭐ Gekwalificeerd</option>
+                      <option value="converted">✅ Geconverteerd</option>
+                      <option value="lost">❌ Verloren</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setEditingLead(null)}
+                      className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      Sluiten
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add New Lead Modal */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowAddForm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Nieuwe Lead Toevoegen</h3>
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-gray-600 mb-6">Voeg handmatig een nieuwe lead toe aan je leadportaal</p>
+                
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  
+                  const newLead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'> = {
+                    name: formData.get('name') as string,
+                    email: formData.get('email') as string,
+                    phone: formData.get('phone') as string,
+                    company: formData.get('company') as string,
+                    address: formData.get('address') as string,
+                    city: formData.get('city') as string,
+                    interest: formData.get('interest') as string,
+                    budget: formData.get('budget') as string,
+                    timeline: formData.get('timeline') as string,
+                    notes: formData.get('notes') as string,
+                    status: 'new',
+                    assignedTo: user?.name || 'Onbekend',
+                    source: 'manual',
+                    sheetRowNumber: undefined,
+                    branchData: undefined
+                  };
+
+                  if (customerData) {
+                    const success = crmSystem.addLeadToCustomer(customerData.id, newLead);
+                    if (success) {
+                      // Refresh data
+                      const updatedCustomer = crmSystem.getCustomerById(customerData.id);
+                      if (updatedCustomer) {
+                        setCustomerData(updatedCustomer);
+                        setLeads(updatedCustomer.leadData || []);
+                      }
+                      
+                      // Sync to Google Sheets if linked
+                      if (customerData.googleSheetUrl && updatedCustomer) {
+                        try {
+                          // Get the newly added lead with its ID
+                          const addedLead = updatedCustomer.leadData?.find(lead => lead.name === newLead.name);
+                          if (addedLead) {
+                            await addLeadToSheet(customerData.googleSheetUrl, addedLead);
+                            console.log('✅ Lead added to Google Sheets');
+                            alert('✅ Nieuwe lead succesvol toegevoegd in portal EN Google Sheets!');
+                          }
+                        } catch (error) {
+                          console.error('Error adding lead to Google Sheets:', error);
+                          alert(`✅ Lead succesvol toegevoegd in portal!\n\n⚠️ Google Sheets sync: ${error instanceof Error ? error.message : 'Fout bij sync'}`);
+                        }
+                      } else {
+                        alert('✅ Nieuwe lead succesvol toegevoegd!');
+                      }
+                      
+                      setShowAddForm(false);
+                    } else {
+                      alert('❌ Fout bij toevoegen van lead');
+                    }
+                  }
+                }} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Naam *</label>
+                      <input
+                        type="text"
+                        name="name"
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="Volledige naam"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
+                      <input
+                        type="email"
+                        name="email"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="email@voorbeeld.nl"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Telefoon</label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="06-12345678"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Bedrijf</label>
+                      <input
+                        type="text"
+                        name="company"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="Bedrijfsnaam"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Adres</label>
+                      <input
+                        type="text"
+                        name="address"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="Straat en huisnummer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Plaats</label>
+                      <input
+                        type="text"
+                        name="city"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="Stad"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Interesse</label>
+                      <input
+                        type="text"
+                        name="interest"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="Wat is de interesse?"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Budget</label>
+                      <select
+                        name="budget"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      >
+                        <option value="">Selecteer budget</option>
+                        <option value="onder €1000">Onder €1.000</option>
+                        <option value="€1000 - €2500">€1.000 - €2.500</option>
+                        <option value="€2500 - €5000">€2.500 - €5.000</option>
+                        <option value="€5000 - €10000">€5.000 - €10.000</option>
+                        <option value="boven €10000">Boven €10.000</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Timeline</label>
+                    <select
+                      name="timeline"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                    >
+                      <option value="">Selecteer timeline</option>
+                      <option value="binnen 1 maand">Binnen 1 maand</option>
+                      <option value="binnen 3 maanden">Binnen 3 maanden</option>
+                      <option value="binnen 6 maanden">Binnen 6 maanden</option>
+                      <option value="binnen 1 jaar">Binnen 1 jaar</option>
+                      <option value="langer dan 1 jaar">Langer dan 1 jaar</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Notities</label>
+                    <textarea
+                      name="notes"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      placeholder="Extra informatie over deze lead..."
+                    />
+                  </div>
+
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddForm(false)}
+                      className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-brand-purple text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      Lead Toevoegen
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Debug Logs Modal */}
+      <AnimatePresence>
+        {showDebugLogs && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDebugLogs(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-red-500 text-white px-6 py-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold">🐛 Debug Logs</h2>
+                <button
+                  onClick={() => setShowDebugLogs(false)}
+                  className="text-white hover:text-red-200 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="mb-4 flex space-x-2">
+                  <button
+                    onClick={() => {
+                      const logsText = debugLogs.join('\n');
+                      navigator.clipboard.writeText(logsText);
+                      alert('Logs gekopieerd naar clipboard!');
+                    }}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    📋 Kopieer Logs
+                  </button>
+                  <button
+                    onClick={() => setDebugLogs([])}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    🗑️ Wis Logs
+                  </button>
+                </div>
+                
+                <div className="bg-gray-900 text-green-400 p-4 rounded-lg max-h-96 overflow-y-auto font-mono text-sm">
+                  {debugLogs.length === 0 ? (
+                    <div className="text-gray-500">Geen logs beschikbaar...</div>
+                  ) : (
+                    debugLogs.map((log, index) => (
+                      <div key={index} className="mb-1">
+                        {log}
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                <div className="mt-4 text-sm text-gray-600">
+                  <strong>Instructies:</strong> Klik op "📋 Kopieer Logs" en plak de logs in je bericht naar mij.
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

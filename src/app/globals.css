@@ -1,26 +1,156 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply font-sans antialiased;
+    background: linear-gradient(135deg, #3B2F75 0%, #E74C8C 35%, #FF6B35 70%, #FF4757 100%);
+    min-height: 100vh;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Chat Components */
+  .chat-container {
+    @apply bg-white/95 backdrop-blur-sm rounded-chat shadow-chat;
+    @apply border border-white/20;
+  }
+  
+  .chat-message {
+    @apply animate-fade-in;
+  }
+  
+  .chat-message.lisa {
+    @apply bg-chat-lisa text-brand-navy rounded-chat p-4 shadow-lisa;
+    @apply border-l-4 border-brand-pink;
+  }
+  
+  .chat-message.user {
+    @apply bg-chat-gradient text-white rounded-chat p-4 shadow-button;
+    @apply ml-auto max-w-xs;
+  }
+  
+  .chat-button {
+    @apply bg-button-gradient text-white font-medium py-3 px-6 rounded-button;
+    @apply shadow-button transition-all duration-300 hover:scale-105 hover:shadow-lg;
+    @apply active:scale-95;
+  }
+  
+  .chat-button:hover {
+    @apply shadow-xl;
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+  }
+  
+  /* Typing Indicator */
+  .typing-indicator {
+    @apply flex space-x-1 p-4;
+  }
+  
+  .typing-dot {
+    @apply w-2 h-2 bg-brand-pink rounded-full animate-typing;
+  }
+  
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  
+  /* Admin Dashboard Components */
+  .admin-card {
+    @apply bg-white rounded-xl shadow-lg border border-gray-200 p-6;
+    @apply hover:shadow-xl transition-shadow duration-300;
+  }
+  
+  .admin-button {
+    @apply bg-lisa-gradient text-white font-medium py-2 px-4 rounded-lg;
+    @apply hover:shadow-lg transition-all duration-200;
+  }
+  
+  /* Form Components */
+  .form-input {
+    @apply w-full px-4 py-3 rounded-lg border border-gray-300;
+    @apply focus:ring-2 focus:ring-brand-pink focus:border-transparent;
+    @apply transition-all duration-200;
+  }
+  
+  /* Gradient Text */
+  .gradient-text {
+    background: linear-gradient(135deg, #E74C8C, #FF6B35);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Mobile Optimizations */
+  @media (max-width: 768px) {
+    .chat-container {
+      @apply mx-2 rounded-lg;
+    }
+    
+    .chat-message {
+      @apply text-sm;
+    }
+    
+    .chat-button {
+      @apply py-4 px-6 text-base;
+      min-height: 44px; /* iOS touch target */
+    }
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .glass-effect {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #E74C8C, #FF6B35);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #FF6B35, #FF4757);
+}
+
+/* Loading Animation */
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #E74C8C;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
