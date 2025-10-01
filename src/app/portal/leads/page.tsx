@@ -578,10 +578,11 @@ export default function CustomerLeadsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-purple to-brand-pink">
-      {/* Header */}
+      {/* Header - Desktop & Mobile optimized */}
       <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-6">
+          {/* Desktop Header */}
+          <div className="hidden md:flex items-center justify-between py-6">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => router.back()}
@@ -617,6 +618,49 @@ export default function CustomerLeadsPage() {
               >
                 <PlusIcon className="w-4 h-4" />
                 <span>Nieuwe lead</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Header */}
+          <div className="md:hidden py-4">
+            {/* Top row: Back button & Settings */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => router.back()}
+                className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors"
+              >
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span className="text-sm">Terug naar account</span>
+              </button>
+              
+              <button
+                onClick={() => setShowSettings(true)}
+                className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-xl transition-colors"
+                title="Instellingen"
+              >
+                <Cog6ToothIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Bottom row: Title & Add button */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-white mb-1">Mijn Leads</h1>
+                <p className="text-sm text-white/70">
+                  {user?.name}
+                </p>
+                <p className="text-xs text-white/60 mt-1">
+                  {leads.length} leads totaal
+                </p>
+              </div>
+              
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="bg-white hover:bg-white/90 text-brand-purple px-4 py-3 rounded-xl flex items-center space-x-2 transition-colors shadow-lg"
+              >
+                <PlusIcon className="w-5 h-5" />
+                <span className="font-semibold">Nieuwe lead</span>
               </button>
             </div>
           </div>
