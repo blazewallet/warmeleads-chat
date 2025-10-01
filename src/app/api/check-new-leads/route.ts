@@ -27,8 +27,25 @@ export async function GET(request: NextRequest) {
     
     console.log('✅ Cron secret verified');
 
-    const customers = crmSystem.getAllCustomers();
-    console.log(`📋 Found ${customers.length} total customers`);
+    // Haal customer data op uit Blob Storage (niet uit localStorage!)
+    let customers = [];
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.warmeleads.eu'}/api/customer-data`);
+      if (response.ok) {
+        const data = await response.json();
+        customers = data.customers || [];
+        console.log(`📋 Loaded ${customers.length} customers from Blob Storage`);
+      } else {
+        console.error('❌ Failed to load customers from Blob Storage');
+        // Fallback to localStorage customers (maar die hebben geen data op server!)
+        customers = crmSystem.getAllCustomers();
+        console.log(`⚠️ Fallback: Using ${customers.length} customers from localStorage`);
+      }
+    } catch (error) {
+      console.error('❌ Error loading customers from Blob Storage:', error);
+      customers = crmSystem.getAllCustomers();
+      console.log(`⚠️ Fallback: Using ${customers.length} customers from localStorage`);
+    }
     
     const results = [];
     

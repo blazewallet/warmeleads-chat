@@ -397,7 +397,7 @@ export default function CustomerLeadsPage() {
     }
   };
 
-  const handleSaveEmailNotifications = () => {
+  const handleSaveEmailNotifications = async () => {
     if (customerData) {
       // Update customer data with notification preferences
       const updatedCustomer = {
@@ -409,10 +409,31 @@ export default function CustomerLeadsPage() {
         }
       };
 
-      // Save to CRM system
+      // Save to CRM system (localStorage)
       crmSystem.updateCustomer(customerData.id, {
         emailNotifications: updatedCustomer.emailNotifications
       });
+
+      // Save to Blob Storage voor server-side toegang (cron job)
+      try {
+        console.log('💾 Saving customer data to Blob Storage...');
+        const response = await fetch('/api/customer-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId: customerData.id,
+            customerData: updatedCustomer
+          })
+        });
+
+        if (response.ok) {
+          console.log('✅ Customer data saved to Blob Storage');
+        } else {
+          console.error('❌ Failed to save to Blob Storage');
+        }
+      } catch (error) {
+        console.error('❌ Error saving to Blob Storage:', error);
+      }
 
       setCustomerData(updatedCustomer);
       console.log('✅ Email notification preferences saved:', emailNotifications);
