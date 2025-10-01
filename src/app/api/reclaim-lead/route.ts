@@ -1,10 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { put, head } from '@vercel/blob';
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Blob store naam voor reclamaties
+const RECLAMATION_PREFIX = 'lead-reclamations';
+
 // API route voor het afhandelen van lead reclamaties
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const customerId = searchParams.get('customerId');
+    const sheetRowNumber = searchParams.get('sheetRowNumber');
+    
+    if (!customerId || !sheetRowNumber) {
+      return NextResponse.json({ hasReclamation: false });
+    }
+    
+    // Check of er een reclamatie bestaat voor deze lead
+    const blobName = `${RECLAMATION_PREFIX}/${customerId}-row${sheetRowNumber}.json`;
+    
+    try {
+      const blob = await head(blobName);
+      if (blob) {
+        // Haal reclamatie data op
+        const response = await fetch(blob.url);
+        const reclamationData = await response.json();
+        
+        console.log(`✅ Found reclamation for customer ${customerId}, row ${sheetRowNumber}`);
+        
+        return NextResponse.json({
+          hasReclamation: true,
+          reclamation: reclamationData
+        });
+      }
+    } catch (error) {
+      // Blob bestaat niet - geen reclamatie
+      return NextResponse.json({ hasReclamation: false });
+    }
+    
+    return NextResponse.json({ hasReclamation: false });
+  } catch (error) {
+    console.error('❌ Error checking reclamation:', error);
+    return NextResponse.json({ hasReclamation: false });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -21,6 +64,51 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Check of er al een reclamatie bestaat voor deze lead
+    const customerId = body.customerId || customerEmail; // Use customerId if available
+    const blobName = `${RECLAMATION_PREFIX}/${customerId}-row${lead.sheetRowNumber}.json`;
+    
+    try {
+      const existingBlob = await head(blobName);
+      if (existingBlob) {
+        console.log('⚠️ Reclamation already exists for this lead');
+        return NextResponse.json(
+          { error: 'Er bestaat al een reclamatieverzoek voor deze lead' },
+          { status: 409 }
+        );
+      }
+    } catch (error) {
+      // Blob bestaat niet - dat is goed, we kunnen een nieuwe maken
+      console.log('✅ No existing reclamation found, proceeding...');
+    }
+
+    // Sla reclamatie op in Blob Storage
+    const reclamationData = {
+      customerId,
+      customerEmail,
+      customerName,
+      lead: {
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        sheetRowNumber: lead.sheetRowNumber
+      },
+      reason,
+      timestamp,
+      status: 'pending' // pending, resolved, rejected
+    };
+
+    console.log('💾 Saving reclamation to Blob Storage...');
+    
+    const blob = await put(blobName, JSON.stringify(reclamationData), {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/json'
+    });
+    
+    console.log('✅ Reclamation saved to Blob Storage');
+    console.log('  Blob URL:', blob.url);
 
     // Verstuur email naar admin (info@warmeleads.eu)
     const adminEmail = 'info@warmeleads.eu';
@@ -219,7 +307,9 @@ www.warmeleads.eu
       success: true,
       emailSent: true,
       recipient: adminEmail,
-      emailId: data?.id
+      emailId: data?.id,
+      reclamationSaved: true,
+      blobUrl: blob.url
     });
   } catch (error) {
     console.error('❌ Error sending reclamation email:', error);

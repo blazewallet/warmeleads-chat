@@ -41,6 +41,7 @@ export default function CustomerLeadsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [leadReclamation, setLeadReclamation] = useState<{hasReclamation: boolean, reclamation?: any}>({ hasReclamation: false });
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -66,7 +67,7 @@ export default function CustomerLeadsPage() {
   }, [customerData]);
   
   // Force refresh lead data when viewing
-  const handleViewLead = (lead: Lead) => {
+  const handleViewLead = async (lead: Lead) => {
     console.log('🔍 Opening lead details for:', lead.name);
     console.log('🔍 Lead branchData:', lead.branchData);
     
@@ -75,6 +76,22 @@ export default function CustomerLeadsPage() {
     console.log('🔍 Fresh lead branchData:', freshLead.branchData);
     
     setViewingLead(freshLead);
+    
+    // Check of er een reclamatie bestaat voor deze lead
+    if (customerData && lead.sheetRowNumber) {
+      try {
+        const response = await fetch(`/api/reclaim-lead?customerId=${customerData.id}&sheetRowNumber=${lead.sheetRowNumber}`);
+        const data = await response.json();
+        setLeadReclamation(data);
+        
+        if (data.hasReclamation) {
+          console.log('⚠️ Lead has existing reclamation:', data.reclamation);
+        }
+      } catch (error) {
+        console.error('Error checking reclamation:', error);
+        setLeadReclamation({ hasReclamation: false });
+      }
+    }
   };
 
   // Direct localStorage auth check - improved for mobile
@@ -1521,51 +1538,74 @@ export default function CustomerLeadsPage() {
 
                 {/* Action Buttons */}
                 <div className="space-y-3 mt-8 pt-6 border-t border-gray-200">
-                  {/* Reclameer Lead Button - Full width op mobiel */}
-                  <button
-                    onClick={() => {
-                      const reden = prompt('⚠️ Waarom wil je deze lead reclameren?\n\nGeef een duidelijke reden op zodat wij je verzoek kunnen beoordelen:');
-                      if (reden && reden.trim()) {
-                        // Verstuur reclamatie naar admin
-                        fetch('/api/reclaim-lead', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            customerEmail: user?.email,
-                            customerName: user?.name,
-                            lead: {
-                              name: viewingLead.name,
-                              email: viewingLead.email,
-                              phone: viewingLead.phone,
-                              sheetRowNumber: viewingLead.sheetRowNumber
-                            },
-                            reason: reden,
-                            timestamp: new Date().toISOString()
+                  {/* Reclamatie status of reclameer button */}
+                  {leadReclamation.hasReclamation ? (
+                    <div className="w-full px-4 py-3 bg-amber-50 border-2 border-amber-300 rounded-xl">
+                      <div className="flex items-start space-x-3">
+                        <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="font-semibold text-amber-900">Reclamatieverzoek ingediend</p>
+                          <p className="text-sm text-amber-700 mt-1">
+                            Je hebt deze lead gereclameerd op {new Date(leadReclamation.reclamation?.timestamp).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}. We nemen zo snel mogelijk contact met je op.
+                          </p>
+                          <p className="text-xs text-amber-600 mt-2 italic">
+                            Status: {leadReclamation.reclamation?.status === 'pending' ? '⏳ In behandeling' : leadReclamation.reclamation?.status}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const reden = prompt('⚠️ Waarom wil je deze lead reclameren?\n\nGeef een duidelijke reden op zodat wij je verzoek kunnen beoordelen:');
+                        if (reden && reden.trim()) {
+                          // Verstuur reclamatie naar admin
+                          fetch('/api/reclaim-lead', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              customerId: customerData?.id,
+                              customerEmail: user?.email,
+                              customerName: user?.name,
+                              lead: {
+                                name: viewingLead.name,
+                                email: viewingLead.email,
+                                phone: viewingLead.phone,
+                                sheetRowNumber: viewingLead.sheetRowNumber
+                              },
+                              reason: reden,
+                              timestamp: new Date().toISOString()
+                            })
                           })
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                          if (data.success) {
-                            alert('✅ Je reclamatieverzoek is verstuurd naar ons team. We nemen zo snel mogelijk contact met je op!');
-                            setViewingLead(null);
-                          } else {
+                          .then(res => res.json())
+                          .then(data => {
+                            if (data.success) {
+                              alert('✅ Je reclamatieverzoek is verstuurd naar ons team. We nemen zo snel mogelijk contact met je op!');
+                              setLeadReclamation({ hasReclamation: true, reclamation: data });
+                            } else if (data.error?.includes('al een reclamatieverzoek')) {
+                              alert('⚠️ Er bestaat al een reclamatieverzoek voor deze lead.');
+                              setLeadReclamation({ hasReclamation: true });
+                            } else {
+                              alert('❌ Er is iets misgegaan. Probeer het later opnieuw.');
+                            }
+                          })
+                          .catch(error => {
+                            console.error('Error submitting reclamation:', error);
                             alert('❌ Er is iets misgegaan. Probeer het later opnieuw.');
-                          }
-                        })
-                        .catch(error => {
-                          console.error('Error submitting reclamation:', error);
-                          alert('❌ Er is iets misgegaan. Probeer het later opnieuw.');
-                        });
-                      }
-                    }}
-                    className="w-full px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors flex items-center justify-center space-x-2 shadow-lg font-semibold"
-                    title="Reclameer deze lead als er iets niet klopt"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <span>Reclameer lead</span>
-                  </button>
+                          });
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors flex items-center justify-center space-x-2 shadow-lg font-semibold"
+                      title="Reclameer deze lead als er iets niet klopt"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span>Reclameer lead</span>
+                    </button>
+                  )}
 
                   {/* Sluiten & Bewerken Buttons */}
                   <div className="flex space-x-3">
