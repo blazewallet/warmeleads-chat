@@ -189,18 +189,9 @@ export default function CustomerLeadsPage() {
     return () => clearTimeout(timer);
   }, [user]);
 
-  // EMERGENCY MOBILE FIX: Force load data immediately and always
+  // EMERGENCY MOBILE FIX: Force load data immediately
   useEffect(() => {
-    let isLoadingData = false; // Prevent multiple simultaneous loads
-    
     const emergencyLoad = async () => {
-      // Prevent multiple simultaneous loads
-      if (isLoadingData) {
-        addDebugLog('🚨 EMERGENCY: Already loading, skipping...');
-        return;
-      }
-      
-      isLoadingData = true;
       setIsLoading(true);
       addDebugLog('🚨 EMERGENCY LOAD: Starting emergency data load...');
       
@@ -340,14 +331,13 @@ export default function CustomerLeadsPage() {
       } finally {
         // ALWAYS reset loading state
         setIsLoading(false);
-        isLoadingData = false;
       }
     };
     
-    // Run emergency load immediately and also after a short delay to ensure it runs
-    emergencyLoad();
-    const timer = setTimeout(emergencyLoad, 1000);
-    return () => clearTimeout(timer);
+    // Only run once when user is available
+    if (user) {
+      emergencyLoad();
+    }
   }, [user]);
 
   // FORCE CACHE BUST: Add version parameter to prevent caching
