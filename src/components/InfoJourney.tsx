@@ -167,7 +167,7 @@ export function InfoJourney({ onBackToHome, onStartChat }: InfoJourneyProps) {
         </div>
         
         <button
-          onClick={() => onStartChat({ entryPoint: 'learn' })}
+          onClick={() => onStartChat('info')}
           className="chat-button px-4 py-2 text-sm"
         >
           💬 Chat Nu
@@ -220,13 +220,13 @@ export function InfoJourney({ onBackToHome, onStartChat }: InfoJourneyProps) {
                 <motion.button
                   onClick={() => {
                     // Bepaal context op basis van sectie
-                    let context: ChatContext = { entryPoint: 'learn' };
-                    if (currentInfo.id === 'what-are-leads') context = { entryPoint: 'learn', userIntent: 'examples' };
-                    if (currentInfo.id === 'our-branches') context = { entryPoint: 'learn', userIntent: 'branches' };
-                    if (currentInfo.id === 'pricing') context = { entryPoint: 'learn', userIntent: 'pricing' };
-                    if (currentInfo.id === 'why-15-minutes') context = { entryPoint: 'learn', userIntent: 'delivery' };
-                    if (currentInfo.id === 'success-stories') context = { entryPoint: 'learn', userIntent: 'roi' };
-                    if (currentInfo.id === 'guarantee') context = { entryPoint: 'learn', userIntent: 'quality' };
+                    let context: ChatContext = 'info';
+                    if (currentInfo.id === 'what-are-leads') context = 'examples';
+                    if (currentInfo.id === 'our-branches') context = 'branches';
+                    if (currentInfo.id === 'pricing') context = 'pricing';
+                    if (currentInfo.id === 'why-15-minutes') context = 'delivery';
+                    if (currentInfo.id === 'success-stories') context = 'roi';
+                    if (currentInfo.id === 'guarantee') context = 'quality';
                     onStartChat(context);
                   }}
                   className="chat-button inline-flex items-center space-x-2"
@@ -290,7 +290,7 @@ export function InfoJourney({ onBackToHome, onStartChat }: InfoJourneyProps) {
 
       {/* Floating Chat Button */}
       <motion.button
-        onClick={() => onStartChat({ entryPoint: 'learn' })}
+        onClick={() => onStartChat('info')}
         className="fixed bottom-6 right-6 w-16 h-16 bg-button-gradient rounded-full shadow-2xl flex items-center justify-center z-50"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
@@ -333,7 +333,7 @@ export function InfoJourney({ onBackToHome, onStartChat }: InfoJourneyProps) {
                 
                 <div className="space-y-3">
                   <motion.button
-                    onClick={() => onStartChat({ entryPoint: 'learn' })}
+                    onClick={() => onStartChat('info')}
                     className="w-full chat-button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}

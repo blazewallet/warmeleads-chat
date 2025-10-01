@@ -21,7 +21,9 @@ import {
   MapPinIcon,
   DocumentTextIcon,
   ArrowTopRightOnSquareIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  Cog6ToothIcon,
+  BellIcon
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
@@ -38,6 +40,7 @@ export default function CustomerLeadsPage() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,17 +49,21 @@ export default function CustomerLeadsPage() {
   // Mobile stats collapse state
   const [statsExpanded, setStatsExpanded] = useState(false);
   
-  // Debug logs state
-  const [showDebugLogs, setShowDebugLogs] = useState(false);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  
-  // Debug logging function
-  const addDebugLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `[${timestamp}] ${message}`;
-    setDebugLogs(prev => [...prev, logEntry]);
-    console.log(message); // Also log to console
-  };
+  // Email notification preferences
+  const [emailNotifications, setEmailNotifications] = useState({
+    enabled: false,
+    newLeads: true
+  });
+
+  // Sync email notifications with customer data
+  useEffect(() => {
+    if (customerData?.emailNotifications) {
+      setEmailNotifications({
+        enabled: customerData.emailNotifications.enabled,
+        newLeads: customerData.emailNotifications.newLeads
+      });
+    }
+  }, [customerData]);
   
   // Force refresh lead data when viewing
   const handleViewLead = (lead: Lead) => {
@@ -70,290 +77,218 @@ export default function CustomerLeadsPage() {
     setViewingLead(freshLead);
   };
 
-  // MOBILE DEBUG: Complete auth and data check
+  // Direct localStorage auth check - improved for mobile
   useEffect(() => {
-    const debugEverything = () => {
-      addDebugLog('🔍 === MOBILE DEBUG START ===');
-      addDebugLog(`🔍 Current state: ${JSON.stringify({
-        authLoading,
-        isAuthenticated,
-        userEmail: user?.email,
-        userName: user?.name,
-        customerData: customerData ? { email: customerData.email, leadCount: customerData.leadData?.length } : null,
-        leadsCount: leads.length,
-        isLoading
-      })}`);
-      
-      // Check all localStorage items
+    const checkAuth = () => {
       try {
+        // Check localStorage directly for auth data
         const authStore = localStorage.getItem('warmeleads-auth-store');
         const adminToken = localStorage.getItem('warmeleads_admin_token');
-        const crmData = localStorage.getItem('warmeleads_crm_data');
         
-        addDebugLog(`🔍 localStorage check: ${JSON.stringify({
+        console.log('🔍 Direct auth check:', {
           hasAuthStore: !!authStore,
           hasAdminToken: !!adminToken,
-          hasCrmData: !!crmData,
-          authStoreContent: authStore ? JSON.parse(authStore) : null,
-          adminTokenContent: adminToken,
-          crmDataSize: crmData ? crmData.length : 0
-        })}`);
+          authStoreData: authStore ? 'exists' : 'missing',
+          zustandState: { authLoading, isAuthenticated, userEmail: user?.email }
+        });
         
-        // Check CRM data
-        if (crmData) {
-          const parsed = JSON.parse(crmData);
-          addDebugLog(`🔍 CRM data: ${JSON.stringify({
-            customerCount: parsed.customers?.length || 0,
-            customerEmails: parsed.customers?.map(([id, customer]: [string, any]) => customer.email) || []
-          })}`);
-        }
+        let hasValidAuth = false;
         
-      } catch (error) {
-        addDebugLog(`❌ localStorage error: ${error}`);
-      }
-      
-      // Check if we should redirect
-      let hasValidAuth = false;
-      
-      if (isAuthenticated && user?.email) {
-        hasValidAuth = true;
-        addDebugLog('✅ Auth via Zustand');
-      }
-      
-      try {
-        const adminToken = localStorage.getItem('warmeleads_admin_token');
+        // Check admin token
         if (adminToken === 'admin_authenticated') {
           hasValidAuth = true;
-          addDebugLog('✅ Auth via admin token');
+          console.log('✅ Admin authenticated via token');
         }
         
-        const authStore = localStorage.getItem('warmeleads-auth-store');
+        // Check auth store
         if (authStore) {
-          const parsed = JSON.parse(authStore);
-          if (parsed.state?.isAuthenticated && parsed.state?.user?.email) {
-            hasValidAuth = true;
-            addDebugLog('✅ Auth via localStorage');
+          try {
+            const parsed = JSON.parse(authStore);
+            if (parsed.state?.isAuthenticated && parsed.state?.user?.email) {
+              hasValidAuth = true;
+              console.log('✅ User authenticated via auth store:', parsed.state.user.email);
+            }
+          } catch (e) {
+            console.log('❌ Error parsing auth store');
           }
         }
+        
+        // Also check Zustand state directly (for mobile compatibility)
+        if (isAuthenticated && user?.email) {
+          hasValidAuth = true;
+          console.log('✅ User authenticated via Zustand state:', user.email);
+        }
+        
+        if (!hasValidAuth) {
+          console.log('🚨 No valid auth found, redirecting to home');
+          // Use replace instead of push to prevent back button issues on mobile
+          router.replace('/');
+        } else {
+          console.log('✅ Valid auth found, staying on leads page');
+        }
       } catch (error) {
-        addDebugLog(`❌ Auth check error: ${error}`);
-      }
-      
-      if (!hasValidAuth) {
-        addDebugLog('🚨 NO AUTH - redirecting to home');
+        console.error('❌ Error during auth check:', error);
+        // On error, redirect to home
         router.replace('/');
-      } else {
-        addDebugLog('✅ AUTH OK - staying on page');
       }
-      
-      addDebugLog('🔍 === MOBILE DEBUG END ===');
     };
     
-    const timer = setTimeout(debugEverything, 1000);
+    // Longer delay for mobile devices to ensure localStorage is ready
+    const timer = setTimeout(checkAuth, 500);
     return () => clearTimeout(timer);
-  }, [router, authLoading, isAuthenticated, user, customerData, leads, isLoading]);
+  }, [router, authLoading, isAuthenticated, user]);
 
-  // Load customer data and leads - SIMPLE and CORRECT approach
+  // Load customer data and leads from blob storage
   useEffect(() => {
-    const loadCustomerData = () => {
-      console.log('🔄 Loading customer data...');
-      console.log('User from Zustand:', user);
-      
+    const loadCustomerData = async () => {
       if (user?.email) {
-        console.log('✅ Found user email:', user.email);
         const customers = crmSystem.getAllCustomers();
-        console.log('📊 All customers:', customers.map(c => ({ email: c.email, leadCount: c.leadData?.length || 0 })));
-        
         const customer = customers.find(c => c.email === user.email);
         
         if (customer) {
-          console.log('✅ Found customer data:', {
-            email: customer.email,
-            leadCount: customer.leadData?.length || 0,
-            hasGoogleSheet: !!customer.googleSheetUrl
-          });
-          setCustomerData(customer);
-          setLeads(customer.leadData || []);
-        } else {
-          console.log('❌ No customer found for email:', user.email);
-        }
-      } else {
-        console.log('❌ No user email found');
-      }
-      
-      setIsLoading(false);
-    };
-    
-    // Small delay to ensure Zustand store is hydrated
-    const timer = setTimeout(loadCustomerData, 200);
-    return () => clearTimeout(timer);
-  }, [user]);
-
-  // EMERGENCY MOBILE FIX: Force load data immediately
-  useEffect(() => {
-    const emergencyLoad = async () => {
-      setIsLoading(true);
-      addDebugLog('🚨 EMERGENCY LOAD: Starting emergency data load...');
-      
-      try {
-        // Try to get user email from any source
-        let userEmail = user?.email;
-        
-        if (!userEmail) {
-          const authStore = localStorage.getItem('warmeleads-auth-store');
-          if (authStore) {
-            const parsed = JSON.parse(authStore);
-            userEmail = parsed.state?.user?.email;
-          }
-        }
-        
-        if (!userEmail) {
-          const adminToken = localStorage.getItem('warmeleads_admin_token');
-          if (adminToken === 'admin_authenticated') {
-            userEmail = 'rick@warmeleads.eu';
-          }
-        }
-        
-        addDebugLog(`🚨 EMERGENCY: User email: ${userEmail}`);
-        
-        if (userEmail) {
-          // First, try to load CRM data from localStorage
-          addDebugLog('🚨 EMERGENCY: Loading CRM data from localStorage...');
-          // Note: loadFromStorage is called automatically by crmSystem
-          
-          // Get customer data
-          const customers = crmSystem.getAllCustomers();
-          addDebugLog(`🚨 EMERGENCY: Found ${customers.length} customers in CRM`);
-          
-          const customer = customers.find(c => c.email === userEmail);
-          
-          addDebugLog(`🚨 EMERGENCY: Customer found: ${!!customer}`);
-          addDebugLog(`🚨 EMERGENCY: Customer has Google Sheet: ${!!customer?.googleSheetUrl}`);
-          
-          if (customer && customer.googleSheetUrl) {
-            addDebugLog('🚨 EMERGENCY: Loading from Google Sheets...');
+          // Try to fetch Google Sheets URL from blob storage
+          try {
+            const response = await fetch(`/api/customer-sheets?customerId=${customer.id}`);
             
-            // Force load from Google Sheets
-            const sheetLeads = await readCustomerLeads(customer.googleSheetUrl);
-            addDebugLog(`🚨 EMERGENCY: Found ${sheetLeads.length} leads in sheets`);
-            
-            // ALWAYS set the leads, even if empty
-            setLeads(sheetLeads);
-            setCustomerData(customer);
-            
-            if (sheetLeads.length > 0) {
-              addDebugLog(`🚨 EMERGENCY: SUCCESS! Loaded ${sheetLeads.length} leads`);
-            } else {
-              addDebugLog('🚨 EMERGENCY: No leads found in sheets, but customer data set');
-            }
-          } else {
-            addDebugLog('🚨 EMERGENCY: No customer or no Google Sheet URL');
-            
-            // If no customer found, try to get Google Sheets URL from server
-            addDebugLog('🚨 EMERGENCY: No customer found, trying to get Google Sheets URL from server...');
-            
-            try {
-              const response = await fetch(`/api/sheets-config?email=${encodeURIComponent(userEmail)}`);
+            if (response.ok) {
               const data = await response.json();
+              console.log('✅ Loaded Google Sheets URL from blob storage:', data.googleSheetUrl);
               
-              addDebugLog(`🚨 EMERGENCY: Server response: ${JSON.stringify(data)}`);
+              // Update customer with blob storage URL (overrides localStorage)
+              const updatedCustomer = {
+                ...customer,
+                googleSheetUrl: data.googleSheetUrl,
+                googleSheetId: data.googleSheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)?.[1]
+              };
               
-              if (data.success && data.googleSheetUrl) {
-                addDebugLog(`🚨 EMERGENCY: Found Google Sheets URL from server: ${data.googleSheetUrl}`);
-                
-                // Create customer with server-provided Google Sheets URL
-                const newCustomer: Omit<Customer, 'id'> = {
-                  name: user?.name || 'Unknown',
-                  email: userEmail,
-                  company: user?.company || '',
-                  phone: user?.phone || '',
-                  googleSheetUrl: data.googleSheetUrl,
-                  leadData: [],
-                  createdAt: new Date(),
-                  lastActivity: new Date(),
-                  status: 'customer',
-                  source: 'direct',
-                  chatHistory: [],
-                  orders: [],
-                  openInvoices: [],
-                  dataHistory: [],
-                  hasAccount: true,
-                  accountCreatedAt: new Date()
-                };
-                
-                // Create customer manually in localStorage
-                const customerId = `customer_${Date.now()}`;
-                const createdCustomer: Customer = {
-                  id: customerId,
-                  ...newCustomer
-                };
-                
-                // Add to CRM system
-                const existingData = crmSystem.getAllCustomers();
-                const updatedData = [...existingData, createdCustomer];
-                
-                // Save to localStorage
-                localStorage.setItem('warmeleads_crm_data', JSON.stringify({
-                  customers: updatedData.map(c => [c.id, c])
-                }));
-                addDebugLog(`🚨 EMERGENCY: Created customer: ${createdCustomer.id}`);
-                
-                // Now try to load leads from Google Sheets
-                if (createdCustomer.googleSheetUrl) {
-                  addDebugLog('🚨 EMERGENCY: Loading leads for new customer...');
-                  const sheetLeads = await readCustomerLeads(createdCustomer.googleSheetUrl);
-                  addDebugLog(`🚨 EMERGENCY: Found ${sheetLeads.length} leads in sheets`);
-                  
-                  // ALWAYS set the leads, even if empty
-                  setLeads(sheetLeads);
-                  setCustomerData(createdCustomer);
-                  
-                  if (sheetLeads.length > 0) {
-                    addDebugLog(`🚨 EMERGENCY: SUCCESS! Loaded ${sheetLeads.length} leads for new customer`);
-                  } else {
-                    addDebugLog('🚨 EMERGENCY: No leads found in Google Sheets, but customer data set');
-                  }
-                }
-              } else {
-                addDebugLog('🚨 EMERGENCY: No Google Sheets URL found on server for this email');
-                addDebugLog('🚨 EMERGENCY: Please configure Google Sheets URL in admin settings');
-              }
-            } catch (error) {
-              addDebugLog(`🚨 EMERGENCY: Error fetching from server: ${error}`);
+              setCustomerData(updatedCustomer);
+              setLeads(updatedCustomer.leadData || []);
+            } else {
+              console.log('ℹ️ No Google Sheets URL in blob storage, using localStorage data');
+              setCustomerData(customer);
+              setLeads(customer.leadData || []);
             }
+          } catch (error) {
+            console.error('Error fetching Google Sheets URL from blob:', error);
+            // Fallback to localStorage data
+            setCustomerData(customer);
+            setLeads(customer.leadData || []);
           }
-        } else {
-          addDebugLog('🚨 EMERGENCY: No user email found');
         }
         
-      } catch (error) {
-        addDebugLog(`🚨 EMERGENCY: Error: ${error}`);
-      } finally {
-        // ALWAYS reset loading state
         setIsLoading(false);
       }
     };
-    
-    // Only run once when user is available
-    if (user) {
-      emergencyLoad();
-    }
+
+    loadCustomerData();
   }, [user]);
 
-  // FORCE CACHE BUST: Add version parameter to prevent caching
+  // Auto smart sync when customer data is loaded - simplified approach
   useEffect(() => {
-    const currentTime = Date.now();
-    addDebugLog(`🚨 CACHE BUST: Page loaded at ${new Date(currentTime).toLocaleString()}`);
-    
-    // Force reload if this is a cached version
-    const lastLoad = localStorage.getItem('warmeleads_last_load');
-    if (lastLoad && (currentTime - parseInt(lastLoad)) < 5000) {
-      addDebugLog('🚨 CACHE BUST: Detected recent load, forcing refresh...');
-      window.location.reload();
+    if (customerData?.googleSheetUrl && !isLoading) {
+      console.log('🔄 Auto smart sync triggered');
+      
+      // Smart sync - only add new leads, preserve existing ones
+      const smartSync = async () => {
+        try {
+          console.log('🔄 Smart sync: checking for new leads...');
+          
+          // Read current data from Google Sheets
+          const sheetLeads = await readCustomerLeads(customerData.googleSheetUrl!);
+          const existingLeads = customerData.leadData || [];
+          
+          // Find new leads by comparing sheet row numbers
+          const existingRowNumbers = new Set(existingLeads.map(lead => lead.sheetRowNumber));
+          const newLeads = sheetLeads.filter(sheetLead => 
+            sheetLead.sheetRowNumber && !existingRowNumbers.has(sheetLead.sheetRowNumber)
+          );
+          
+          // Find deleted leads (leads that exist in CRM but not in sheet)
+          const sheetRowNumbers = new Set(sheetLeads.map(sheetLead => sheetLead.sheetRowNumber));
+          const deletedLeads = existingLeads.filter(existingLead => 
+            existingLead.sheetRowNumber && !sheetRowNumbers.has(existingLead.sheetRowNumber)
+          );
+          
+          console.log(`🆕 Found ${newLeads.length} new leads to add`);
+          console.log(`🗑️ Found ${deletedLeads.length} leads to remove`);
+          
+          let hasChanges = false;
+          
+          // Add new leads
+          if (newLeads.length > 0) {
+            const addedLeads: Lead[] = [];
+            for (const leadData of newLeads) {
+              const leadToAdd: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'> = {
+                name: leadData.name,
+                email: leadData.email,
+                phone: leadData.phone,
+                company: leadData.company,
+                address: leadData.address,
+                city: leadData.city,
+                interest: leadData.interest,
+                budget: leadData.budget,
+                timeline: leadData.timeline,
+                notes: leadData.notes,
+                status: leadData.status,
+                assignedTo: leadData.assignedTo,
+                source: 'import',
+                sheetRowNumber: leadData.sheetRowNumber,
+                branchData: leadData.branchData
+              };
+              
+              const addedLead = crmSystem.addLeadToCustomer(customerData.id, leadToAdd);
+              if (addedLead) {
+                addedLeads.push(addedLead);
+                console.log(`✅ Added new lead: ${leadData.name}`);
+                hasChanges = true;
+              }
+            }
+            
+            // Directly update the leads state to add new leads immediately
+            if (addedLeads.length > 0) {
+              setLeads(prevLeads => {
+                // Filter out any existing leads with the same sheetRowNumber to prevent duplicates
+                const existingRowNumbers = new Set(prevLeads.map(lead => lead.sheetRowNumber));
+                const uniqueNewLeads = addedLeads.filter(lead => !existingRowNumbers.has(lead.sheetRowNumber));
+                return [...prevLeads, ...uniqueNewLeads];
+              });
+            }
+          }
+          
+          // Remove deleted leads
+          if (deletedLeads.length > 0) {
+            for (const deletedLead of deletedLeads) {
+              const success = crmSystem.removeLeadFromCustomer(customerData.id, deletedLead.id);
+              if (success) {
+                console.log(`🗑️ Removed deleted lead: ${deletedLead.name}`);
+                hasChanges = true;
+                
+                // Directly update the leads state to remove the deleted lead immediately
+                setLeads(prevLeads => prevLeads.filter(lead => lead.id !== deletedLead.id));
+              }
+            }
+          }
+          
+          // Update customer data if there were changes (but don't update leads state again)
+          if (hasChanges) {
+            const updatedCustomer = crmSystem.getCustomerById(customerData.id);
+            if (updatedCustomer) {
+              setCustomerData(updatedCustomer);
+            }
+            
+            console.log(`✅ Smart sync complete: ${newLeads.length} new leads added, ${deletedLeads.length} leads removed`);
+          } else {
+            console.log(`✅ Smart sync complete: no changes detected`);
+          }
+          
+        } catch (error) {
+          console.error('Smart sync error:', error);
+        }
+      };
+      
+      smartSync();
     }
-    
-    localStorage.setItem('warmeleads_last_load', currentTime.toString());
-  }, []);
+  }, [customerData?.googleSheetUrl, isLoading]);
 
   // Filter, sort and paginate leads
   const { filteredLeads, totalPages, paginatedLeads } = useMemo(() => {
@@ -459,6 +394,29 @@ export default function CustomerLeadsPage() {
     } catch (error) {
       console.error('Error deleting lead:', error);
       alert('❌ Fout bij verwijderen van lead');
+    }
+  };
+
+  const handleSaveEmailNotifications = () => {
+    if (customerData) {
+      // Update customer data with notification preferences
+      const updatedCustomer = {
+        ...customerData,
+        emailNotifications: {
+          enabled: emailNotifications.enabled,
+          newLeads: emailNotifications.newLeads,
+          lastNotificationSent: customerData.emailNotifications?.lastNotificationSent
+        }
+      };
+
+      // Save to CRM system
+      crmSystem.updateCustomer(customerData.id, {
+        emailNotifications: updatedCustomer.emailNotifications
+      });
+
+      setCustomerData(updatedCustomer);
+      console.log('✅ Email notification preferences saved:', emailNotifications);
+      alert('✅ Email notificatie instellingen opgeslagen!');
     }
   };
 
@@ -623,15 +581,13 @@ export default function CustomerLeadsPage() {
             </div>
 
             <div className="flex items-center space-x-3">
-              {/* Sync Google Sheets button removed per user request */}
-              
-              {/* Debug button for mobile */}
+              {/* Settings button */}
               <button
-                onClick={() => setShowDebugLogs(true)}
-                className="bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3 py-2 rounded-lg text-sm transition-colors"
-                title="Show debug logs"
+                onClick={() => setShowSettings(true)}
+                className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors"
+                title="Instellingen"
               >
-                🐛
+                <Cog6ToothIcon className="w-5 h-5" />
               </button>
               
               <button
@@ -835,11 +791,11 @@ export default function CustomerLeadsPage() {
             </div>
             
             <div className="relative">
-              <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="pl-10 pr-8 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple bg-white appearance-none cursor-pointer"
               >
                 <option value="all">Alle statussen</option>
                 <option value="new">🆕 Nieuw</option>
@@ -848,6 +804,9 @@ export default function CustomerLeadsPage() {
                 <option value="converted">✅ Geconverteerd</option>
                 <option value="lost">❌ Verloren</option>
               </select>
+              <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
           </div>
         </motion.div>
@@ -867,11 +826,18 @@ export default function CustomerLeadsPage() {
               </h3>
               <p className="text-gray-600 mb-6">
                 {customerData?.googleSheetUrl 
-                  ? 'Leads worden automatisch geladen vanuit Google Sheets.'
+                  ? 'Synchroniseer met Google Sheets om uw leads te importeren.'
                   : 'Uw leads verschijnen hier na aankoop en Google Sheets koppeling.'
                 }
               </p>
-              {/* Sync button removed - emergency load handles everything automatically */}
+              {customerData?.googleSheetUrl && (
+                <button
+                  onClick={syncWithGoogleSheets}
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors"
+                >
+                  🔄 Sync met Google Sheets
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -885,16 +851,16 @@ export default function CustomerLeadsPage() {
                     className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 cursor-pointer hover:shadow-md transition-all"
                     onClick={() => handleViewLead(lead)}
                   >
-                    {/* Header met Avatar en Quick Actions */}
-                    <div className="flex items-start justify-between mb-4">
+                    {/* Header met Avatar en Naam */}
+                    <div className="flex items-start mb-4">
                       <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
                           <span className="text-white font-bold text-xl">
                             {lead.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-gray-900 text-lg truncate">{lead.name}</h3>
+                          <h3 className="font-bold text-gray-900 text-lg break-words pr-2">{lead.name}</h3>
                           {lead.company && (
                             <p className="text-sm text-gray-600 truncate">{lead.company}</p>
                           )}
@@ -905,44 +871,67 @@ export default function CustomerLeadsPage() {
                           </div>
                         </div>
                       </div>
+                    </div>
+                    
+                    {/* Quick Actions - Compacte bolletjes horizontaal */}
+                    <div className="flex items-center space-x-2 mb-4">
+                      {/* Bellen knop */}
+                      <a
+                        href={`tel:${lead.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-11 h-11 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center transition-colors shadow-md"
+                        title="Bellen"
+                      >
+                        <PhoneIcon className="w-5 h-5 text-white" />
+                      </a>
                       
-                      <div className="flex space-x-1 ml-2">
-                        {/* Bellen knop */}
-                        <a
-                          href={`tel:${lead.phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-10 h-10 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center transition-colors shadow-sm"
-                          title="Bellen"
-                        >
-                          <PhoneIcon className="w-5 h-5 text-white" />
-                        </a>
-                        
-                        {/* WhatsApp knop */}
-                        <a
-                          href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=Hallo ${lead.name}, ik neem contact met je op via Warmeleads.`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-10 h-10 bg-green-400 hover:bg-green-500 rounded-full flex items-center justify-center transition-colors shadow-sm"
-                          title="WhatsApp"
-                        >
-                          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
-                          </svg>
-                        </a>
-                        
-                        {/* Bewerken knop */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingLead(lead);
-                          }}
-                          className="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center transition-colors shadow-sm"
-                          title="Bewerken"
-                        >
-                          <PencilIcon className="w-5 h-5 text-white" />
-                        </button>
-                      </div>
+                      {/* WhatsApp knop */}
+                      <a
+                        href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=Hallo ${lead.name}, ik neem contact met je op via Warmeleads.`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-11 h-11 bg-green-400 hover:bg-green-500 rounded-full flex items-center justify-center transition-colors shadow-md"
+                        title="WhatsApp"
+                      >
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+                        </svg>
+                      </a>
+                      
+                      {/* Email knop */}
+                      <a
+                        href={`mailto:${lead.email}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-11 h-11 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center transition-colors shadow-md"
+                        title="Email versturen"
+                      >
+                        <EnvelopeIcon className="w-5 h-5 text-white" />
+                      </a>
+                      
+                      {/* Bewerken knop */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingLead(lead);
+                        }}
+                        className="w-11 h-11 bg-purple-500 hover:bg-purple-600 rounded-full flex items-center justify-center transition-colors shadow-md"
+                        title="Bewerken"
+                      >
+                        <PencilIcon className="w-5 h-5 text-white" />
+                      </button>
+                      
+                      {/* Verwijderen knop */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteLead(lead);
+                        }}
+                        className="w-11 h-11 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors shadow-md"
+                        title="Verwijderen"
+                      >
+                        <TrashIcon className="w-5 h-5 text-white" />
+                      </button>
                     </div>
 
                     {/* Contact Info - Compact */}
@@ -988,7 +977,7 @@ export default function CustomerLeadsPage() {
 
                     {/* Status Badge & Branch Info */}
                     <div className="flex items-center justify-between">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 flex-1">
                         {lead.branchData?.zonnepanelen && (
                           <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">
                             🌞 {lead.branchData.zonnepanelen}
@@ -1006,20 +995,8 @@ export default function CustomerLeadsPage() {
                         )}
                       </div>
                       
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteLead(lead);
-                          }}
-                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Verwijderen"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                        <div className="text-xs text-gray-400">
-                          Tik voor details →
-                        </div>
+                      <div className="text-xs text-gray-400 text-right ml-2 flex-shrink-0">
+                        Tik voor details →
                       </div>
                     </div>
                   </motion.div>
@@ -1795,67 +1772,142 @@ export default function CustomerLeadsPage() {
         )}
       </AnimatePresence>
 
-      {/* Debug Logs Modal */}
+      {/* Settings Modal */}
       <AnimatePresence>
-        {showDebugLogs && (
+        {showSettings && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowDebugLogs(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowSettings(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden"
+              exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full"
             >
-              <div className="bg-red-500 text-white px-6 py-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold">🐛 Debug Logs</h2>
-                <button
-                  onClick={() => setShowDebugLogs(false)}
-                  className="text-white hover:text-red-200 transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-              
               <div className="p-6">
-                <div className="mb-4 flex space-x-2">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
+                    <Cog6ToothIcon className="w-7 h-7 text-brand-purple" />
+                    <span>Leadportaal instellingen</span>
+                  </h3>
                   <button
-                    onClick={() => {
-                      const logsText = debugLogs.join('\n');
-                      navigator.clipboard.writeText(logsText);
-                      alert('Logs gekopieerd naar clipboard!');
-                    }}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    onClick={() => setShowSettings(false)}
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
                   >
-                    📋 Kopieer Logs
-                  </button>
-                  <button
-                    onClick={() => setDebugLogs([])}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                  >
-                    🗑️ Wis Logs
+                    ✕
                   </button>
                 </div>
-                
-                <div className="bg-gray-900 text-green-400 p-4 rounded-lg max-h-96 overflow-y-auto font-mono text-sm">
-                  {debugLogs.length === 0 ? (
-                    <div className="text-gray-500">Geen logs beschikbaar...</div>
-                  ) : (
-                    debugLogs.map((log, index) => (
-                      <div key={index} className="mb-1">
-                        {log}
+
+                {/* Email Notifications Section */}
+                <div className="space-y-6">
+                  <div className="border-b border-gray-200 pb-4">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center space-x-2">
+                      <BellIcon className="w-5 h-5 text-brand-purple" />
+                      <span>Email notificaties</span>
+                    </h4>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Ontvang automatisch een email wanneer er nieuwe leads binnenkomen, zelfs als je het portal niet geopend hebt.
+                    </p>
+
+                    <div className="space-y-4">
+                      {/* Enable/Disable Email Notifications */}
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <div className="flex-1">
+                          <label htmlFor="email-notifications-enabled" className="font-medium text-gray-900 cursor-pointer">
+                            Email notificaties inschakelen
+                          </label>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Krijg emails over nieuwe leads die binnenkomen
+                          </p>
+                        </div>
+                        <div className="ml-4">
+                          <button
+                            type="button"
+                            onClick={() => setEmailNotifications(prev => ({ ...prev, enabled: !prev.enabled }))}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              emailNotifications.enabled ? 'bg-brand-purple' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                emailNotifications.enabled ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
                       </div>
-                    ))
-                  )}
-                </div>
-                
-                <div className="mt-4 text-sm text-gray-600">
-                  <strong>Instructies:</strong> Klik op "📋 Kopieer Logs" en plak de logs in je bericht naar mij.
+
+                      {/* New Leads Notification */}
+                      {emailNotifications.enabled && (
+                        <div className="flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-200">
+                          <div className="flex-1">
+                            <label htmlFor="email-new-leads" className="font-medium text-gray-900 cursor-pointer">
+                              Nieuwe leads
+                            </label>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Stuur een email zodra een nieuwe lead binnenkomt
+                            </p>
+                          </div>
+                          <div className="ml-4">
+                            <button
+                              type="button"
+                              onClick={() => setEmailNotifications(prev => ({ ...prev, newLeads: !prev.newLeads }))}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                emailNotifications.newLeads ? 'bg-brand-purple' : 'bg-gray-300'
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  emailNotifications.newLeads ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Info Box */}
+                      {emailNotifications.enabled && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                          <div className="flex items-start space-x-3">
+                            <BellIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-blue-800">
+                              <p className="font-medium mb-1">Automatische monitoring actief</p>
+                              <p className="text-blue-700">
+                                We controleren elke dag om 8:00 automatisch of er nieuwe leads in je Google Sheet staan en sturen direct een email naar <strong>{user?.email}</strong> als er nieuwe leads zijn.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings(false)}
+                      className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSaveEmailNotifications();
+                        setShowSettings(false);
+                      }}
+                      className="px-6 py-2.5 bg-gradient-to-r from-brand-purple to-brand-pink text-white rounded-xl hover:opacity-90 font-semibold transition-opacity"
+                    >
+                      Instellingen opslaan
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>

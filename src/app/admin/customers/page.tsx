@@ -549,127 +549,114 @@ export default function CustomersPage() {
                         )}
                         
                         {customer.hasAccount && (
-                          <button
-                            onClick={async () => {
-                              const currentUrl = customer.googleSheetUrl || '';
-                              const promptText = customer.googleSheetId 
-                                ? `Huidige Google Sheets URL:\n${currentUrl}\n\nNieuwe URL (leeg laten om te verwijderen):`
-                                : 'Google Sheets URL voor deze klant:\n(Bijv: https://docs.google.com/spreadsheets/d/1ABC.../edit)';
-                              
-                              const sheetUrl = prompt(promptText);
-                              
-                              // If user cancels or enters same URL, do nothing
-                              if (sheetUrl === null || sheetUrl === currentUrl) {
-                                return;
-                              }
-                              
-                              // If empty string, remove the sheet
-                              if (sheetUrl === '') {
-                                if (confirm('Weet je zeker dat je de Google Sheet koppeling wilt verwijderen?')) {
+                          <>
+                            <button
+                              onClick={async () => {
+                                const currentUrl = customer.googleSheetUrl || '';
+                                const sheetUrl = prompt(
+                                  `Google Sheets URL voor deze klant:\n${currentUrl ? `Huidige URL: ${currentUrl}\n\n` : ''}Voer nieuwe URL in:\n(Bijv: https://docs.google.com/spreadsheets/d/1ABC.../edit)`,
+                                  currentUrl
+                                );
+                                
+                                if (sheetUrl && sheetUrl.includes('docs.google.com/spreadsheets')) {
                                   try {
-                                    // Remove from server
-                                    const response = await fetch('/api/sheets-config', {
-                                      method: 'POST',
-                                      headers: {
-                                        'Content-Type': 'application/json',
-                                      },
-                                      body: JSON.stringify({
-                                        email: customer.email,
-                                        googleSheetUrl: '',
-                                        customerName: customer.name || customer.email
-                                      })
-                                    });
-
-                                    const result = await response.json();
-
-                                    if (result.success) {
-                                      // Update localStorage
-                                      const updatedCustomers = customers.map(c => 
-                                        c.id === customer.id 
-                                          ? { ...c, googleSheetId: undefined, googleSheetUrl: undefined }
-                                          : c
-                                      );
+                                    // Extract sheet ID from URL
+                                    const match = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+                                    if (match) {
+                                      const sheetId = match[1];
                                       
-                                      localStorage.setItem('warmeleads_crm_data', JSON.stringify({
-                                        customers: updatedCustomers.map(c => [c.id, c]),
-                                        customersByEmail: updatedCustomers.map(c => [c.email, c.id])
-                                      }));
+                                      console.log('📊 Saving Google Sheets URL to blob storage...');
+                                      console.log('Customer ID:', customer.id);
+                                      console.log('Google Sheets URL:', sheetUrl);
+                                      console.log('Sheet ID:', sheetId);
                                       
-                                      alert(`✅ Google Sheet koppeling verwijderd voor ${customer.name || customer.email}!`);
-                                      window.location.reload();
+                                      // Save to Vercel Blob Storage
+                                      const response = await fetch('/api/customer-sheets', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          customerId: customer.id,
+                                          googleSheetUrl: sheetUrl
+                                        })
+                                      });
+
+                                      if (response.ok) {
+                                        const result = await response.json();
+                                        console.log('✅ Successfully saved:', result);
+                                        
+                                        if (result.blobUrl) {
+                                          console.log('✅ Saved to blob storage!');
+                                          console.log('Blob URL:', result.blobUrl);
+                                        } else if (result.warning) {
+                                          console.warn('⚠️', result.warning);
+                                        }
+                                        
+                                        // Update customer with Google Sheet info (localStorage blijft als backup)
+                                        const updatedCustomers = customers.map(c => 
+                                          c.id === customer.id 
+                                            ? { ...c, googleSheetId: sheetId, googleSheetUrl: sheetUrl }
+                                            : c
+                                        );
+                                        
+                                        // Save to localStorage
+                                        localStorage.setItem('warmeleads_crm_data', JSON.stringify({
+                                          customers: updatedCustomers.map(c => [c.id, c]),
+                                          customersByEmail: updatedCustomers.map(c => [c.email, c.id])
+                                        }));
+                                        
+                                        const storageType = result.blobUrl ? 'blob storage en localStorage' : 'localStorage (blob storage niet geconfigureerd)';
+                                        alert(`✅ Google Sheet ${customer.googleSheetId ? 'bijgewerkt' : 'gekoppeld'} en opgeslagen in ${storageType} voor ${customer.name || customer.email}!`);
+                                        window.location.reload();
+                                      } else {
+                                        const error = await response.json();
+                                        console.error('❌ Failed to save to blob storage:', error);
+                                        
+                                        // Still update localStorage as fallback
+                                        const updatedCustomers = customers.map(c => 
+                                          c.id === customer.id 
+                                            ? { ...c, googleSheetId: sheetId, googleSheetUrl: sheetUrl }
+                                            : c
+                                        );
+                                        
+                                        localStorage.setItem('warmeleads_crm_data', JSON.stringify({
+                                          customers: updatedCustomers.map(c => [c.id, c]),
+                                          customersByEmail: updatedCustomers.map(c => [c.email, c.id])
+                                        }));
+                                        
+                                        alert(`⚠️ Google Sheet opgeslagen in localStorage (blob storage fout: ${error.details || error.error})\n\nDe URL werkt nog steeds via localStorage.`);
+                                        window.location.reload();
+                                      }
                                     } else {
-                                      alert(`❌ Fout bij verwijderen Google Sheet: ${result.error}`);
+                                      console.error('❌ Invalid Google Sheets URL format');
+                                      alert('❌ Ongeldige Google Sheets URL');
                                     }
                                   } catch (error) {
-                                    console.error('Error removing sheets config:', error);
-                                    alert('❌ Fout bij verwijderen Google Sheet');
+                                    console.error('❌ Error saving Google Sheet URL:', error);
+                                    alert('❌ Fout bij koppelen Google Sheet');
                                   }
+                                } else if (sheetUrl !== null && sheetUrl !== '') {
+                                  console.error('❌ URL does not contain docs.google.com/spreadsheets');
+                                  alert('❌ Ongeldige Google Sheets URL');
                                 }
-                                return;
-                              }
-                              
-                              // Validate URL
-                              if (sheetUrl && sheetUrl.includes('docs.google.com/spreadsheets')) {
-                                try {
-                                  // Save to server
-                                  const response = await fetch('/api/sheets-config', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                      email: customer.email,
-                                      googleSheetUrl: sheetUrl,
-                                      customerName: customer.name || customer.email
-                                    })
-                                  });
-
-                                  const result = await response.json();
-
-                                  if (result.success) {
-                                    // Also update localStorage for backward compatibility
-                                    const updatedCustomers = customers.map(c => 
-                                      c.id === customer.id 
-                                        ? { ...c, googleSheetId: result.googleSheetId, googleSheetUrl: sheetUrl }
-                                        : c
-                                    );
-                                    
-                                    localStorage.setItem('warmeleads_crm_data', JSON.stringify({
-                                      customers: updatedCustomers.map(c => [c.id, c]),
-                                      customersByEmail: updatedCustomers.map(c => [c.email, c.id])
-                                    }));
-                                    
-                                    const action = customer.googleSheetId ? 'aangepast' : 'gekoppeld';
-                                    alert(`✅ Google Sheet ${action} voor ${customer.name || customer.email}!`);
-                                    window.location.reload();
-                                  } else {
-                                    alert(`❌ Fout bij koppelen Google Sheet: ${result.error}`);
-                                  }
-                                } catch (error) {
-                                  console.error('Error saving sheets config:', error);
-                                  alert('❌ Fout bij koppelen Google Sheet');
-                                }
-                              } else {
-                                alert('❌ Ongeldige Google Sheets URL. Zorg dat de URL begint met https://docs.google.com/spreadsheets/');
-                              }
-                            }}
-                            className="text-green-600 hover:text-green-800 transition-colors"
-                            title={customer.googleSheetId ? "Google Sheet aanpassen" : "Google Sheet koppelen"}
-                          >
-                            📊
-                          </button>
-                        )}
-                        
-                        {customer.googleSheetId && customer.googleSheetUrl && (
-                          <a
-                            href={customer.googleSheetUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 transition-colors ml-1"
-                            title="Open Google Sheet"
-                          >
-                            🔗
-                          </a>
+                              }}
+                              className="text-green-600 hover:text-green-800 transition-colors"
+                              title={customer.googleSheetId ? "Google Sheet URL wijzigen" : "Google Sheet koppelen"}
+                            >
+                              {customer.googleSheetId ? '✏️📊' : '📊'}
+                            </button>
+                            
+                            {customer.googleSheetId && (
+                              <a
+                                href={customer.googleSheetUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 transition-colors ml-2"
+                                title="Open Google Sheet"
+                              >
+                                🔗
+                              </a>
+                            )}
+                          </>
                         )}
                         
                         <a

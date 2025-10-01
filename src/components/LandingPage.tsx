@@ -52,7 +52,7 @@ export function LandingPage({ onPathSelect }: LandingPageProps) {
     // Start ROI chat flow with proper context
     console.log('Starting ROI chat');
     // Set ROI context using the context manager
-    ChatContextManager.setContext({ userIntent: 'roi' });
+    ChatContextManager.setContext('roi');
     // Navigate to chat but DON'T call onPathSelect as it will override our context
     // Instead, we need to trigger the chat directly with ROI context
     window.location.href = '/?chat=roi';

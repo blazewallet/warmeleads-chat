@@ -25,19 +25,19 @@ const faqData = [
         q: 'Wat maakt WarmeLeads anders dan andere leadgenerators?',
         a: 'Wij leveren binnen 15 minuten verse leads die maximaal 24 uur oud zijn. De meeste concurrenten verkopen leads die dagen of weken oud zijn, waardoor de conversiekans veel lager is.',
         chatPrompt: 'Vraag Lisa naar concrete voorbeelden',
-        context: { entryPoint: 'questions' as const, userIntent: 'examples' }
+        context: 'examples' as ChatContext as ChatContext
       },
       {
         q: 'Hoe werkt de lead delivery precies?',
         a: 'Wij genereren verse leads via onze campagnes op verschillende platformen. Deze echte geïnteresseerde prospects worden realtime (op kwartier nauwkeurig) ingeladen in uw persoonlijke dashboard zodra ze gegenereerd zijn. U krijgt complete contactgegevens, interesse niveau en beste contact moment.',
         chatPrompt: 'Chat over CRM integratie',
-        context: { entryPoint: 'questions' as const, userIntent: 'delivery' }
+        context: 'delivery' as ChatContext as ChatContext
       },
       {
         q: 'Wat als ik niet tevreden ben met de leads?',
         a: 'Wij bieden 100% tevredenheidsgarantie. Slechte leads worden gratis vervangen of u krijgt uw geld terug. Onze kwaliteitscontrole zorgt ervoor dat dit zelden voorkomt.',
         chatPrompt: 'Meer over kwaliteitsgarantie',
-        context: { entryPoint: 'questions' as const, userIntent: 'quality' }
+        context: 'quality' as ChatContext as ChatContext
       }
     ]
   },
@@ -48,19 +48,19 @@ const faqData = [
         q: 'Wat is het verschil tussen exclusieve en gedeelde leads?',
         a: 'Exclusieve leads zijn alleen voor u (hogere conversie, premium prijs). Gedeelde leads worden met maximaal 2 andere bedrijven gedeeld (1/3 van de prijs, nog steeds hoge kwaliteit).',
         chatPrompt: 'Help me kiezen tussen exclusief/gedeeld',
-        context: { entryPoint: 'questions' as const, userIntent: 'pricing' }
+        context: 'pricing' as ChatContext
       },
       {
         q: 'Zijn er setup kosten of verborgen kosten?',
         a: 'Nee! U betaalt alleen voor de leads die u ontvangt. Geen setup kosten, geen maandelijkse abonnementen, geen verborgen kosten. Volledige transparantie.',
         chatPrompt: 'Bereken mijn totale investering',
-        context: { entryPoint: 'questions' as const, userIntent: 'pricing' }
+        context: 'pricing' as ChatContext
       },
       {
         q: 'Kan ik ook kleinere aantallen bestellen?',
         a: 'Exclusieve leads vanaf 30 stuks. Gedeelde leads hebben een minimum van 500 stuks voor optimale prijs-kwaliteit verhouding. Voor maatwerk kunt u altijd contact opnemen.',
         chatPrompt: 'Vraag naar maatwerk opties',
-        context: { entryPoint: 'questions' as const, userIntent: 'pricing' }
+        context: 'pricing' as ChatContext
       }
     ]
   },
@@ -71,19 +71,19 @@ const faqData = [
         q: 'Hoe integreren jullie met mijn CRM systeem?',
         a: 'Wij ondersteunen API integraties met HubSpot, Salesforce, Pipedrive en custom CRM systemen. Ook mogelijk via webhook, CSV export of direct email delivery.',
         chatPrompt: 'Setup CRM integratie',
-        context: { entryPoint: 'questions' as const, userIntent: 'delivery' }
+        context: 'delivery' as ChatContext
       },
       {
         q: 'Hoe worden leads gegenereerd?',
         a: 'Via een combinatie van online marketing, partnerships en eigen data sources. Alle leads worden gescreend op interesse en kwaliteit voordat ze worden geleverd.',
         chatPrompt: 'Meer over lead kwaliteit',
-        context: { entryPoint: 'questions' as const, userIntent: 'quality' }
+        context: 'quality' as ChatContext
       },
       {
         q: 'Wat voor data krijg ik per lead?',
         a: 'Per lead ontvangt u: volledige naam, telefoonnummer, email, postcode, interesse niveau (1-10), beste contact moment en specifieke interesse punten.',
         chatPrompt: 'Bekijk voorbeeld lead',
-        context: { entryPoint: 'questions' as const, userIntent: 'examples' }
+        context: 'examples' as ChatContext
       }
     ]
   }
@@ -129,7 +129,7 @@ export function SmartFAQ({ onBackToHome, onStartChat }: SmartFAQProps) {
         </div>
         
         <button
-          onClick={() => onStartChat({ entryPoint: 'questions' })}
+          onClick={() => onStartChat('faq')}
           className="chat-button px-4 py-2 text-sm"
         >
           💬 Chat Nu
@@ -261,7 +261,7 @@ export function SmartFAQ({ onBackToHome, onStartChat }: SmartFAQProps) {
               Geen vragen gevonden voor "{searchTerm}"
             </div>
             <motion.button
-              onClick={() => onStartChat({ entryPoint: 'questions' })}
+              onClick={() => onStartChat('faq')}
               className="chat-button"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -285,7 +285,7 @@ export function SmartFAQ({ onBackToHome, onStartChat }: SmartFAQProps) {
             Lisa beantwoordt al uw vragen persoonlijk en kan direct een offerte maken!
           </p>
           <motion.button
-            onClick={() => onStartChat({ entryPoint: 'questions' })}
+            onClick={() => onStartChat('faq')}
             className="chat-button"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}

@@ -34,7 +34,7 @@ interface ChatInterfaceProps {
   onShowAccountCreation?: () => void;
 }
 
-export function ChatInterface({ entryPoint = { entryPoint: 'direct' }, onBackToHome, onShowAccountCreation }: ChatInterfaceProps) {
+export function ChatInterface({ entryPoint = 'direct', onBackToHome, onShowAccountCreation }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [currentStep, setCurrentStep] = useState('welcome');
@@ -78,13 +78,7 @@ export function ChatInterface({ entryPoint = { entryPoint: 'direct' }, onBackToH
     }
 
     // Get context configuration from the context manager
-    const contextConfig = { 
-      welcomeMessage: 'Hallo! Ik ben Lisa van WarmeLeads. Hoe kan ik je helpen?',
-      introMessage: 'Ik help je graag met het vinden van de juiste leads voor jouw bedrijf!',
-      questionMessage: 'Wat voor soort leads zoek je?',
-      options: ['Direct bestellen', 'Meer informatie', 'Prijzen bekijken'],
-      initialStep: 'welcome'
-    };
+    const contextConfig = ChatContextManager.getContextConfig(entryPoint);
     chatLogger.debug('ChatInterface starting', { entryPoint, contextConfig });
 
     // Lisa's welkomstbericht
@@ -230,7 +224,7 @@ export function ChatInterface({ entryPoint = { entryPoint: 'direct' }, onBackToH
     // Handle login redirect
     if (response === 'Naar inlogpagina' && onBackToHome) {
       // Store current context for return after login
-      ChatContextManager.setContext({ entryPoint: 'direct' });
+      ChatContextManager.setContext('direct');
       // Navigate to login page
       window.location.href = '/?page=login';
       return;

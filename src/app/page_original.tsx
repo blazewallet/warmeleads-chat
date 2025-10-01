@@ -23,16 +23,6 @@ export default function HomePage() {
 
   useEffect(() => {
     setIsLoaded(true);
-    
-    // Check for URL parameters to set chat context
-    const urlParams = new URLSearchParams(window.location.search);
-    const chatParam = urlParams.get('chat');
-    
-    if (chatParam === 'roi') {
-      // Set ROI context and go to chat
-      ChatContextManager.setContext('roi');
-      setCurrentPage('chat');
-    }
   }, []);
 
   if (!isLoaded) {
@@ -104,8 +94,6 @@ export default function HomePage() {
   const handlePathSelect = (path: 'direct' | 'learn' | 'questions' | 'customer') => {
     switch (path) {
       case 'direct':
-        // Set correct context for direct leads ordering
-        ChatContextManager.setContext('direct');
         setCurrentPage('chat');
         break;
       case 'learn':

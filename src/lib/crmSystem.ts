@@ -28,6 +28,11 @@ export interface Customer {
   googleSheetId?: string;
   googleSheetUrl?: string;
   leadData?: Lead[];
+  emailNotifications?: {
+    enabled: boolean;
+    newLeads: boolean;
+    lastNotificationSent?: Date;
+  };
 }
 
 export interface Order {
@@ -127,13 +132,8 @@ class CRMSystem {
   private loadFromStorage() {
     try {
       const stored = localStorage.getItem('warmeleads_crm_data');
-      console.log('🔄 Loading CRM data from localStorage...');
-      console.log('📦 Stored data exists:', !!stored);
-      
       if (stored) {
         const { customers, customersByEmail } = JSON.parse(stored);
-        console.log('📊 Found customers in storage:', customers.length);
-        console.log('📧 Customer emails:', customers.map(([id, customer]: [string, any]) => customer.email));
         
         // Properly restore customers with dates and branchData
         this.customers = new Map(customers.map(([id, customer]: [string, any]) => [id, {
@@ -161,10 +161,6 @@ class CRMSystem {
         this.customersByEmail = new Map(customersByEmail);
         
         console.log('📊 CRM data loaded from storage with branch data preservation');
-        console.log('👥 Total customers loaded:', this.customers.size);
-        console.log('📧 Customer emails loaded:', Array.from(this.customers.values()).map(c => c.email));
-      } else {
-        console.log('❌ No CRM data found in localStorage');
       }
     } catch (error) {
       console.error('Error loading CRM data:', error);
@@ -431,6 +427,19 @@ class CRMSystem {
       customer.lastActivity = new Date();
       this.saveToStorage();
     }
+  }
+
+  // Update customer data (generic)
+  updateCustomer(customerId: string, updates: Partial<Customer>): boolean {
+    const customer = this.customers.get(customerId);
+    if (customer) {
+      Object.assign(customer, updates);
+      customer.lastActivity = new Date();
+      this.saveToStorage();
+      console.log(`✅ Customer ${customerId} updated with:`, updates);
+      return true;
+    }
+    return false;
   }
 
   // Account management
