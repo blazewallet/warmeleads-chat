@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
         const existingLeads = customer.leadData || [];
         
         // Vind nieuwe leads
-        const existingRowNumbers = new Set(existingLeads.map(lead => lead.sheetRowNumber));
+        const existingRowNumbers = new Set(existingLeads.map((lead: any) => lead.sheetRowNumber));
         const newLeads = sheetLeads.filter(sheetLead => 
           sheetLead.sheetRowNumber && !existingRowNumbers.has(sheetLead.sheetRowNumber)
         );
