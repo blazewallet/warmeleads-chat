@@ -585,7 +585,7 @@ export default function CustomerLeadsPage() {
           <div className="hidden md:flex items-center justify-between py-6">
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => router.back()}
+                onClick={() => router.push('/portal')}
                 className="flex items-center space-x-2 text-white/80 hover:text-white transition-colors"
               >
                 <ArrowLeftIcon className="w-5 h-5" />
@@ -627,7 +627,7 @@ export default function CustomerLeadsPage() {
             {/* Top row: Back button & Settings */}
             <div className="flex items-center justify-between mb-4">
               <button
-                onClick={() => router.back()}
+                onClick={() => router.push('/portal')}
                 className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors"
               >
                 <ArrowLeftIcon className="w-5 h-5" />
