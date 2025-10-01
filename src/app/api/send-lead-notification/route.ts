@@ -214,7 +214,7 @@ www.warmeleads.eu
     
     try {
       const { data, error } = await resend.emails.send({
-        from: 'WarmeLeads <onboarding@resend.dev>', // Voor nu gebruik je Resend's test domein
+        from: 'WarmeLeads <leads@warmeleads.eu>', // Geverifieerd domein
         to: customerEmail,
         subject: emailContent.subject,
         html: emailContent.html,
