@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { crmSystem } from '@/lib/crmSystem';
 import { readCustomerLeads } from '@/lib/googleSheetsAPI';
 
 // Deze API route wordt aangeroepen door een Vercel Cron Job
@@ -37,14 +36,11 @@ export async function GET(request: NextRequest) {
         console.log(`📋 Loaded ${customers.length} customers from Blob Storage`);
       } else {
         console.error('❌ Failed to load customers from Blob Storage');
-        // Fallback to localStorage customers (maar die hebben geen data op server!)
-        customers = crmSystem.getAllCustomers();
-        console.log(`⚠️ Fallback: Using ${customers.length} customers from localStorage`);
+        console.error('⚠️ No customers found - Blob Storage is required for cron jobs');
       }
     } catch (error) {
       console.error('❌ Error loading customers from Blob Storage:', error);
-      customers = crmSystem.getAllCustomers();
-      console.log(`⚠️ Fallback: Using ${customers.length} customers from localStorage`);
+      console.error('⚠️ No customers found - Blob Storage is required for cron jobs');
     }
     
     const results = [];
@@ -114,7 +110,11 @@ export async function GET(request: NextRequest) {
               branchData: leadData.branchData
             };
             
-            crmSystem.addLeadToCustomer(customer.id, leadToAdd);
+            // Voeg lead toe aan customer data
+            customer.leadData = customer.leadData || [];
+            customer.leadData.push(leadToAdd);
+            
+            console.log(`➕ Added lead ${leadData.name} to customer data (will be saved after all leads processed)`);
             
             // Verstuur aparte email voor deze specifieke lead
             if (customer.emailNotifications?.newLeads) {
@@ -150,13 +150,32 @@ export async function GET(request: NextRequest) {
             }
           }
           
-          // Update lastNotificationSent
-          crmSystem.updateCustomer(customer.id, {
-            emailNotifications: {
-              ...customer.emailNotifications,
-              lastNotificationSent: new Date()
+          // Update lastNotificationSent en sla customer data op in Blob Storage
+          customer.emailNotifications = {
+            ...customer.emailNotifications,
+            lastNotificationSent: new Date()
+          };
+          
+          // Sla bijgewerkte customer data op in Blob Storage
+          try {
+            console.log(`💾 Saving updated customer data to Blob Storage for ${customer.email}...`);
+            const saveResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.warmeleads.eu'}/api/customer-data`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customerId: customer.id,
+                customerData: customer
+              })
+            });
+            
+            if (saveResponse.ok) {
+              console.log(`✅ Customer data saved to Blob Storage for ${customer.email}`);
+            } else {
+              console.error(`❌ Failed to save customer data to Blob Storage for ${customer.email}`);
             }
-          });
+          } catch (saveError) {
+            console.error(`❌ Error saving customer data to Blob Storage:`, saveError);
+          }
           
           console.log(`✅ Processed ${newLeads.length} leads for ${customer.email}: ${emailsSent} emails sent, ${emailsFailed} failed`);
           
