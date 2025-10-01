@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { put, del, list } from '@vercel/blob';
 
-// Vercel KV key prefix for sheets configurations
-const KV_PREFIX = 'sheets-config:';
+// Blob storage path for sheets configurations
+const BLOB_PATH_PREFIX = 'sheets-config/';
 
 // Type definition for sheets configuration
 interface SheetsConfig {
@@ -15,32 +15,59 @@ interface SheetsConfig {
 // Load configuration for a specific email
 async function loadConfig(email: string): Promise<SheetsConfig | null> {
   try {
-    const data = await kv.get<SheetsConfig>(`${KV_PREFIX}${email}`);
-    return data || null;
+    const blobPath = `${BLOB_PATH_PREFIX}${email}.json`;
+    
+    // List all blobs with the specific prefix
+    const { blobs } = await list({ prefix: blobPath });
+    
+    if (blobs.length === 0) {
+      return null;
+    }
+    
+    // Get the blob content
+    const response = await fetch(blobs[0].url);
+    const data = await response.json();
+    return data;
   } catch (error) {
-    console.error('Error loading config from KV:', error);
+    console.error('Error loading config from Blob:', error);
     return null;
   }
 }
 
 // Save configuration for a specific email
-async function saveConfig(email: string, config: SheetsConfig) {
+async function saveConfig(email: string, config: SheetsConfig): Promise<boolean> {
   try {
-    await kv.set(`${KV_PREFIX}${email}`, config);
+    const blobPath = `${BLOB_PATH_PREFIX}${email}.json`;
+    
+    // Store the config as JSON in Blob storage
+    await put(blobPath, JSON.stringify(config, null, 2), {
+      access: 'public',
+      contentType: 'application/json',
+    });
+    
     return true;
   } catch (error) {
-    console.error('Error saving config to KV:', error);
+    console.error('Error saving config to Blob:', error);
     return false;
   }
 }
 
 // Delete configuration for a specific email
-async function deleteConfig(email: string) {
+async function deleteConfig(email: string): Promise<boolean> {
   try {
-    await kv.del(`${KV_PREFIX}${email}`);
+    const blobPath = `${BLOB_PATH_PREFIX}${email}.json`;
+    
+    // List blobs with the specific prefix
+    const { blobs } = await list({ prefix: blobPath });
+    
+    if (blobs.length > 0) {
+      // Delete the blob
+      await del(blobs[0].url);
+    }
+    
     return true;
   } catch (error) {
-    console.error('Error deleting config from KV:', error);
+    console.error('Error deleting config from Blob:', error);
     return false;
   }
 }
@@ -117,14 +144,14 @@ export async function POST(request: NextRequest) {
     const googleSheetId = match[1];
 
     // Create config object
-    const config = {
+    const config: SheetsConfig = {
       googleSheetUrl,
       googleSheetId,
       customerName: customerName || email,
       configuredAt: new Date().toISOString()
     };
 
-    // Save to Vercel KV
+    // Save to Vercel Blob
     const saved = await saveConfig(email, config);
 
     if (!saved) {
