@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
 
 // API route voor het versturen van email notificaties over nieuwe leads
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: NextRequest) {
   try {
@@ -204,34 +208,46 @@ www.warmeleads.eu
       `
     };
 
-    // Verstuur email (hier gebruik je later je email service zoals SendGrid, Resend, etc.)
-    // Voor nu loggen we alleen
-    console.log('📧 Email content prepared:', emailContent);
+    // Verstuur email via Resend
+    console.log('📧 Sending email via Resend to:', customerEmail);
+    console.log('📧 Email subject:', emailContent.subject);
     
-    // TODO: Implementeer email verzending met je gekozen email service
-    // Bijvoorbeeld met Resend:
-    // const response = await fetch('https://api.resend.com/emails', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-    //     'Content-Type': 'application/json'
-    //   },
-    //   body: JSON.stringify({
-    //     from: 'WarmeLeads <leads@warmeleads.eu>',
-    //     to: customerEmail,
-    //     subject: emailContent.subject,
-    //     html: emailContent.html
-    //   })
-    // });
-    
-    console.log(`✅ Email notification prepared for ${customerEmail} - Lead: ${lead.name}`);
+    try {
+      const { data, error } = await resend.emails.send({
+        from: 'WarmeLeads <onboarding@resend.dev>', // Voor nu gebruik je Resend's test domein
+        to: customerEmail,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text
+      });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      console.log(`✅ Email successfully sent via Resend!`);
+      console.log(`✅ Email ID:`, data?.id);
+      console.log(`✅ Recipient: ${customerEmail} - Lead: ${lead.name}`);
 
-    return NextResponse.json({
-      success: true,
-      emailSent: true,
-      recipient: customerEmail,
-      leadName: lead.name
-    });
+      return NextResponse.json({
+        success: true,
+        emailSent: true,
+        recipient: customerEmail,
+        leadName: lead.name,
+        emailId: data?.id
+      });
+    } catch (emailError) {
+      console.error('❌ Failed to send email via Resend:', emailError);
+      
+      // Return error but don't throw - we still want to mark the lead as processed
+      return NextResponse.json({
+        success: false,
+        emailSent: false,
+        recipient: customerEmail,
+        leadName: lead.name,
+        error: emailError instanceof Error ? emailError.message : 'Unknown error'
+      }, { status: 500 });
+    }
   } catch (error) {
     console.error('❌ Error sending lead notification:', error);
     return NextResponse.json(
