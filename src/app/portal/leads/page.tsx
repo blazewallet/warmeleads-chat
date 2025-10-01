@@ -191,7 +191,17 @@ export default function CustomerLeadsPage() {
 
   // EMERGENCY MOBILE FIX: Force load data immediately and always
   useEffect(() => {
+    let isLoadingData = false; // Prevent multiple simultaneous loads
+    
     const emergencyLoad = async () => {
+      // Prevent multiple simultaneous loads
+      if (isLoadingData) {
+        addDebugLog('🚨 EMERGENCY: Already loading, skipping...');
+        return;
+      }
+      
+      isLoadingData = true;
+      setIsLoading(true);
       addDebugLog('🚨 EMERGENCY LOAD: Starting emergency data load...');
       
       try {
@@ -327,6 +337,10 @@ export default function CustomerLeadsPage() {
         
       } catch (error) {
         addDebugLog(`🚨 EMERGENCY: Error: ${error}`);
+      } finally {
+        // ALWAYS reset loading state
+        setIsLoading(false);
+        isLoadingData = false;
       }
     };
     
