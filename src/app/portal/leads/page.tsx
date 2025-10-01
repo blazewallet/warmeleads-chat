@@ -1520,8 +1520,8 @@ export default function CustomerLeadsPage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-3 mt-8 pt-6 border-t border-gray-200">
-                  {/* Reclameer Lead Section */}
+                <div className="space-y-3 mt-8 pt-6 border-t border-gray-200">
+                  {/* Reclameer Lead Button - Full width op mobiel */}
                   <button
                     onClick={() => {
                       const reden = prompt('⚠️ Waarom wil je deze lead reclameren?\n\nGeef een duidelijke reden op zodat wij je verzoek kunnen beoordelen:');
@@ -1558,19 +1558,20 @@ export default function CustomerLeadsPage() {
                         });
                       }
                     }}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center justify-center space-x-2 shadow-md"
+                    className="w-full px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors flex items-center justify-center space-x-2 shadow-lg font-semibold"
                     title="Reclameer deze lead als er iets niet klopt"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    <span className="font-medium">Reclameer lead</span>
+                    <span>Reclameer lead</span>
                   </button>
 
-                  <div className="flex justify-end space-x-3">
+                  {/* Sluiten & Bewerken Buttons */}
+                  <div className="flex space-x-3">
                     <button
                       onClick={() => setViewingLead(null)}
-                      className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                      className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
                     >
                       Sluiten
                     </button>
@@ -1579,7 +1580,7 @@ export default function CustomerLeadsPage() {
                         setEditingLead(viewingLead);
                         setViewingLead(null);
                       }}
-                      className="px-6 py-2 bg-gradient-to-r from-brand-purple to-brand-pink text-white rounded-lg hover:shadow-lg transition-all duration-300"
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-brand-purple to-brand-pink text-white rounded-xl hover:shadow-lg transition-all duration-300 font-semibold"
                     >
                       Bewerken
                     </button>
