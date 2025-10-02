@@ -9,7 +9,7 @@ import {
   CurrencyEuroIcon,
   UserGroupIcon,
   CheckCircleIcon,
-  TrendingUpIcon,
+  ArrowUpIcon,
   EyeIcon,
   SparklesIcon
 } from '@heroicons/react/24/outline';
@@ -182,7 +182,7 @@ export default function CRMAnalyticsPage() {
           <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
-                <TrendingUpIcon className="w-6 h-6 text-orange-400" />
+                <ArrowUpIcon className="w-6 h-6 text-orange-400" />
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-white">€{Math.round(overallStats.avgLeadValue)}</div>
