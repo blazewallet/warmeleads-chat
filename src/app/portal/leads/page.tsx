@@ -28,6 +28,7 @@ import {
 import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { readCustomerLeads, GoogleSheetsService, updateLeadInSheet, addLeadToSheet } from '@/lib/googleSheetsAPI';
+import { branchIntelligence, type Branch, type BranchIntelligence, type BranchAnalytics } from '@/lib/branchIntelligence';
 
 export default function CustomerLeadsPage() {
   const router = useRouter();
@@ -37,6 +38,8 @@ export default function CustomerLeadsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | Lead['status']>('all');
+  const [filterBranch, setFilterBranch] = useState<'all' | Branch>('all');
+  const [branchAnalytics, setBranchAnalytics] = useState<BranchAnalytics[]>([]);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
@@ -180,10 +183,28 @@ export default function CustomerLeadsPage() {
               
               setCustomerData(updatedCustomer);
               setLeads(updatedCustomer.leadData || []);
+              
+              // 🧠 Generate branch analytics
+              if (updatedCustomer.leadData && updatedCustomer.leadData.length > 0) {
+                const analytics = branchIntelligence.analyzeBranchPerformance(updatedCustomer.leadData);
+                setBranchAnalytics(analytics);
+                console.log('📊 Branch analytics generated:', analytics);
+              } else {
+                setBranchAnalytics([]);
+              }
             } else {
               console.log('ℹ️ No Google Sheets URL in blob storage, using localStorage data');
               setCustomerData(customer);
               setLeads(customer.leadData || []);
+              
+              // 🧠 Generate branch analytics for localStorage data
+              if (customer.leadData && customer.leadData.length > 0) {
+                const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
+                setBranchAnalytics(analytics);
+                console.log('📊 Branch analytics generated (localStorage):', analytics);
+              } else {
+                setBranchAnalytics([]);
+              }
             }
           } catch (error) {
             console.error('Error fetching Google Sheets URL from blob:', error);
@@ -309,7 +330,7 @@ export default function CustomerLeadsPage() {
 
   // Filter, sort and paginate leads
   const { filteredLeads, totalPages, paginatedLeads } = useMemo(() => {
-    // Filter leads
+    // Filter leads with branch intelligence
     const filtered = leads.filter(lead => {
       const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -318,7 +339,12 @@ export default function CustomerLeadsPage() {
       
       const matchesFilter = filterStatus === 'all' || lead.status === filterStatus;
       
-      return matchesSearch && matchesFilter;
+      const matchesBranch = filterBranch === 'all' || (() => {
+        const intelligence = branchIntelligence.detectBranch(lead);
+        return intelligence.detectedBranch === filterBranch;
+      })();
+      
+      return matchesSearch && matchesFilter && matchesBranch;
     });
     
     // Sort by date (most recent first)
@@ -339,7 +365,7 @@ export default function CustomerLeadsPage() {
       totalPages: total,
       paginatedLeads: paginated
     };
-  }, [leads, searchTerm, filterStatus, currentPage, leadsPerPage]);
+  }, [leads, searchTerm, filterStatus, filterBranch, currentPage, leadsPerPage]);
 
   // Calculate statistics based on filtered leads
   const stats = {
@@ -872,6 +898,7 @@ export default function CustomerLeadsPage() {
               />
             </div>
             
+            {/* Status Filter */}
             <div className="relative">
               <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
               <select
@@ -885,6 +912,28 @@ export default function CustomerLeadsPage() {
                 <option value="qualified">⭐ Gekwalificeerd</option>
                 <option value="converted">✅ Geconverteerd</option>
                 <option value="lost">❌ Verloren</option>
+              </select>
+              <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            {/* Branch Filter */}
+            <div className="relative">
+              <ChartBarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+              <select
+                value={filterBranch}
+                onChange={(e) => setFilterBranch(e.target.value as any)}
+                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple bg-white appearance-none cursor-pointer"
+              >
+                <option value="all">Alle branches</option>
+                <option value="Thuisbatterijen">🔋 Thuisbatterijen</option>
+                <option value="Financial Lease">🚗 Financial Lease</option>
+                <option value="Warmtepompen">🔥 Warmtepompen</option>
+                <option value="Zonnepanelen">☀️ Zonnepanelen</option>
+                <option value="Airco">❄️ Airco</option>
+                <option value="Custom">🎯 Multi-Branch</option>
+                <option value="Unknown">❓ Overige</option>
               </select>
               <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
