@@ -31,6 +31,16 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico", sizes: "16x16", type: "image/x-icon" }
+    ],
+    apple: [
+      { url: "/favicon.png", sizes: "180x180", type: "image/png" }
+    ],
+    shortcut: "/favicon.ico"
+  },
   openGraph: {
     title: "Leads Kopen Nederland | Verse Leads Thuisbatterijen, Zonnepanelen, Warmtepompen",
     description: "Koop exclusieve en gedeelde leads voor thuisbatterijen, zonnepanelen, warmtepompen, airco's en financial lease. Nederlandse prospects uit onze campagnes, realtime delivery in 15 minuten.",
