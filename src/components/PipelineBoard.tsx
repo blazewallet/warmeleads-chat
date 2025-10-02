@@ -192,13 +192,7 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
             {pipelineStages
               .sort((a, b) => a.order - b.order)
               .map((stage, index) => (
-                <motion.div
-                  key={stage.id}
-                  initial={{ opacity: 0, x: 50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex-shrink-0 w-80"
-                >
+                <div key={stage.id} className="flex-shrink-0 w-80">
                   <Droppable droppableId={stage.id}>
                     {(provided, snapshot) => (
                       <div
@@ -247,17 +241,10 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
                             {stage.leads.map((lead, index) => (
                               <Draggable key={lead.id} draggableId={lead.id} index={index}>
                                 {(provided, snapshot) => (
-                                  <motion.div
+                                  <div
                                     ref={provided.innerRef}
                                     {...provided.draggableProps}
                                     {...provided.dragHandleProps}
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ 
-                                      opacity: 1, 
-                                      scale: snapshot.isDragging ? 1.05 : 1 
-                                    }}
-                                    exit={{ opacity: 0, scale: 0.9 }}
-                                    transition={{ duration: 0.2 }}
                                     className={`p-3 rounded-xl cursor-move transition-all ${
                                       snapshot.isDragging 
                                         ? 'bg-white shadow-lg shadow-black/25' 
@@ -305,7 +292,7 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
                                         </span>
                                       </div>
                                     </div>
-                                  </motion.div>
+                                  </div>
                                 )}
                               </Draggable>
                             ))}
@@ -316,17 +303,13 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
                       </div>
                     )}
                   </Droppable>
-                </motion.div>
+                </div>
               ))}
           </AnimatePresence>
 
           {/* Create New Stage */}
           {isCreatingStage && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex-shrink-0 w-80 bg-white/5 border-2 border-dashed border-white/30 rounded-2xl p-4"
-            >
+            <div className="flex-shrink-0 w-80 bg-white/5 border-2 border-dashed border-white/30 rounded-2xl p-4">
               <div className="space-y-4">
                 <h3 className="font-medium text-white">Nieuwe Fase</h3>
                 <input
@@ -357,7 +340,7 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           )}
         </div>
       </DragDropContext>
