@@ -69,12 +69,14 @@ export default function CRMDashboard() {
       if (!customer) {
         console.error('No customer found in API or localStorage');
         // Initialize empty customer data to prevent redirect loop
-        const emptyCustomer = {
+        const emptyCustomer: Customer = {
           id: user?.email || 'temp',
           email: user?.email || '',
           name: user?.name || 'Unknown',
           createdAt: new Date(),
           lastActivity: new Date(),
+          status: 'active',
+          source: 'direct',
           leadData: [],
           dataHistory: [],
           chatHistory: [],
@@ -85,7 +87,10 @@ export default function CRMDashboard() {
             orderUpdates: false,
             support: false
           },
-          lastNotificationSent: undefined
+          lastNotificationSent: undefined,
+          orders: [],
+          openInvoices: [],
+          hasAccount: true
         };
         setCustomerData(emptyCustomer);
         setLeads([]);
