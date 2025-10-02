@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { put, head } from '@vercel/blob';
 
 // Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build');
 
 // Blob store naam voor reclamaties
 const RECLAMATION_PREFIX = 'lead-reclamations';

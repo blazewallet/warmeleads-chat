@@ -8,8 +8,8 @@ import {
   UserGroupIcon,
   CogIcon,
   ArrowRightIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
   ClockIcon
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/lib/auth';
@@ -39,7 +39,9 @@ export default function CRMDashboard() {
   }, [isAuthenticated, user, authLoading]);
 
   const loadCRMData = () => {
-    const customer = crmSystem.getCustomerByEmail(user?.email!);
+    const customers = crmSystem.getAllCustomers();
+    const customer = customers.find(c => c.email === user?.email);
+    
     if (!customer) {
       console.error('No customer found');
       setIsLoading(false);
@@ -209,8 +211,8 @@ export default function CRMDashboard() {
                       analytics.trends.growth < 0 ? 'bg-red-100 text-red-800' : 
                       'bg-gray-100 text-gray-800'
                     }`}>
-                      {analytics.trends.growth > 0 ? <TrendingUpIcon className="w-3 h-3" /> : 
-                       analytics.trends.growth < 0 ? <TrendingDownIcon className="w-3 h-3" /> :
+                      {analytics.trends.growth > 0 ? <ArrowUpIcon className="w-3 h-3" /> : 
+                       analytics.trends.growth < 0 ? <ArrowDownIcon className="w-3 h-3" /> :
                        <ClockIcon className="w-3 h-3" />}
                       <span>{analytics.trends.growth > 0 ? '+' : ''}{analytics.trends.growth}%</span>
                     </div>
