@@ -27,11 +27,8 @@ export default function CRMSettingsPage() {
   
   // Settings states
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
-  const [emailNotifications, setEmailNotifications] = useState({
-    newLeads: true,
-    statusUpdates: true,
-    weeklyReports: false
-  });
+  const [newLeadsNotification, setNewLeadsNotification] = useState(true);
+  const [weeklyReportsNotification, setWeeklyReportsNotification] = useState(false);
   const [branchSettings, setBranchSettings] = useState({
     autoDetection: true,
     confidenceThreshold: 0.7,
@@ -70,11 +67,8 @@ export default function CRMSettingsPage() {
         setGoogleSheetUrl(customer.googleSheetUrl || '');
         
         if (customer.emailNotifications) {
-          setEmailNotifications({
-            newLeads: customer.emailNotifications.newLeads ?? true,
-            statusUpdates: customer.emailNotifications.statusUpdates ?? true,
-            weeklyReports: customer.emailNotifications.weeklyReports ?? false
-          });
+          setNewLeadsNotification(customer.emailNotifications.newLeads ?? true);
+          setWeeklyReportsNotification(customer.emailNotifications.weeklyReports ?? false);
         }
       }
       
@@ -132,7 +126,11 @@ export default function CRMSettingsPage() {
       // Update customer data with new email notification settings
       const updatedCustomer = {
         ...customerData,
-        emailNotifications
+        emailNotifications: {
+          ...customerData.emailNotifications,
+          newLeads: newLeadsNotification,
+          weeklyReports: weeklyReportsNotification
+        }
       };
 
       // Save to CRM system
@@ -287,8 +285,8 @@ export default function CRMSettingsPage() {
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={emailNotifications.newLeads}
-                    onChange={(e) => setEmailNotifications(prev => ({ ...prev, newLeads: e.target.checked }))}
+                    checked={newLeadsNotification}
+                    onChange={(e) => setNewLeadsNotification(e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
@@ -303,8 +301,8 @@ export default function CRMSettingsPage() {
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={emailNotifications.statusUpdates}
-                    onChange={(e) => setEmailNotifications(prev => ({ ...prev, statusUpdates: e.target.checked }))}
+                    checked={true}
+                    disabled
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
@@ -319,8 +317,8 @@ export default function CRMSettingsPage() {
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={emailNotifications.weeklyReports}
-                    onChange={(e) => setEmailNotifications(prev => ({ ...prev, weeklyReports: e.target.checked }))}
+                    checked={weeklyReportsNotification}
+                    onChange={(e) => setWeeklyReportsNotification(e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
