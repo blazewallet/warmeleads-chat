@@ -86,6 +86,14 @@ const quickActions = [
     requiresAccount: true,
   },
   {
+    icon: Cog6ToothIcon,
+    title: 'CRM Dashboard',
+    description: 'Enterprise-grade lead management & analytics',
+    action: 'crm',
+    color: 'bg-purple-600',
+    requiresAccount: true,
+  },
+  {
     icon: ChartBarIcon,
     title: 'Performance dashboard',
     description: 'Bekijk uw conversie statistieken',
@@ -150,8 +158,11 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
     if (action === 'reorder' || action === 'support') {
       onStartChat();
     } else if (action === 'leads') {
-      // Navigate to dedicated leads page
-      window.location.href = '/portal/leads';
+      // Navigate to CRM leads page
+      window.location.href = '/crm/leads';
+    } else if (action === 'crm') {
+      // Navigate to CRM dashboard
+      window.location.href = '/crm';
     } else {
       setSelectedAction(action);
     }

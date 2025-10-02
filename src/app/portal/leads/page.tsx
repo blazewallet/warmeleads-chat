@@ -951,8 +951,8 @@ export default function CustomerLeadsPage() {
           </div>
         </motion.div>
 
-        {/* Premium Branch Analytics Dashboard */}
-        {branchAnalytics.length > 0 && (
+        {/* Analytics moved to /crm - this section removed for clean leads interface */}
+        {false && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
