@@ -150,7 +150,7 @@ export default function CRMDashboard() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-white">🏢 CRM Dashboard</h1>
-                <p className="text-white/80 text-sm">Enterprise-grade lead & branch management</p>
+                <p className="text-white/80 text-sm">Enterprise-grade lead & branch beheer</p>
               </div>
             </div>
             
@@ -184,10 +184,10 @@ export default function CRMDashboard() {
               <UserGroupIcon className="w-8 h-8 text-blue-400" />
               <ArrowRightIcon className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Leads Management</h3>
-            <p className="text-white/70 text-sm mb-3">Manage your leads with AI-powered branch detection</p>
+            <h3 className="text-xl font-bold text-white mb-2">Leads Beheer</h3>
+            <p className="text-white/70 text-sm mb-3">Beheer je leads met AI-gebaseerde branch detectie</p>
             <div className="text-2xl font-bold text-blue-400">{overallStats.totalLeads}</div>
-            <div className="text-xs text-white/60">Total leads</div>
+            <div className="text-xs text-white/60">Totaal leads</div>
           </motion.div>
 
           <motion.div
@@ -199,10 +199,10 @@ export default function CRMDashboard() {
               <ChartBarIcon className="w-8 h-8 text-purple-400" />
               <ArrowRightIcon className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Advanced Analytics</h3>
-            <p className="text-white/70 text-sm mb-3">Deep dive into branch performance & trends</p>
+            <h3 className="text-xl font-bold text-white mb-2">Geavanceerde Analytics</h3>
+            <p className="text-white/70 text-sm mb-3">Gedetailleerde branch prestaties & trends</p>
             <div className="text-2xl font-bold text-purple-400">{overallStats.conversionRate.toFixed(1)}%</div>
-            <div className="text-xs text-white/60">Conversion rate</div>
+            <div className="text-xs text-white/60">Conversie rate</div>
           </motion.div>
 
           <motion.div
@@ -214,10 +214,10 @@ export default function CRMDashboard() {
               <CogIcon className="w-8 h-8 text-green-400" />
               <ArrowRightIcon className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Settings & Config</h3>
-            <p className="text-white/70 text-sm mb-3">Configure branch settings & integrations</p>
+            <h3 className="text-xl font-bold text-white mb-2">Instellingen & Configuratie</h3>
+            <p className="text-white/70 text-sm mb-3">Configureer branch instellingen & integraties</p>
             <div className="text-2xl font-bold text-green-400">{branchAnalytics.length}</div>
-            <div className="text-xs text-white/60">Active branches</div>
+            <div className="text-xs text-white/60">Actieve branches</div>
           </motion.div>
         </motion.div>
 
@@ -229,12 +229,12 @@ export default function CRMDashboard() {
             transition={{ delay: 0.3 }}
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-white">🧠 Branch Intelligence Overview</h2>
+              <h2 className="text-3xl font-bold text-white">🧠 Branch Intelligence Overzicht</h2>
               <button
                 onClick={() => handleNavigateToModule('/crm/analytics')}
                 className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl transition-colors flex items-center space-x-2"
               >
-                <span>Beluister Analytics</span>
+                <span>Bekijk Analytics</span>
                 <ArrowRightIcon className="w-4 h-4" />
               </button>
             </div>
@@ -277,17 +277,17 @@ export default function CRMDashboard() {
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-white/70 text-sm">Conversion:</span>
+                      <span className="text-white/70 text-sm">Conversie:</span>
                       <span className="font-bold text-purple-400">{analytics.conversionRate.toFixed(1)}%</span>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-white/70 text-sm">Revenue:</span>
+                      <span className="text-white/70 text-sm">Omzet:</span>
                       <span className="font-bold text-green-400">€{Math.round(analytics.revenue / 1000)}K</span>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-white/70 text-sm">AVG Lead:</span>
+                      <span className="text-white/70 text-sm">Gem. Lead:</span>
                       <span className="font-bold text-blue-400">€{Math.round(analytics.avgLeadValue)}</span>
                     </div>
                   </div>
