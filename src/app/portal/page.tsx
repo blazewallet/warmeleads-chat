@@ -8,7 +8,9 @@ export default function PortalPage() {
   const router = useRouter();
 
   const handleBackToHome = () => {
-    router.push('/');
+    // Logout user first, then go to homepage
+    // This will clear auth state and show landing page
+    window.location.href = '/';
   };
 
   const handleStartChat = () => {

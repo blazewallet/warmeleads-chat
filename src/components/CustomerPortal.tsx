@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/n navigation';
 import { 
   ArrowLeftIcon,
   PlusIcon,
@@ -120,6 +121,7 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [customerData, setCustomerData] = useState<Customer | null>(null);
   const { user, isAuthenticated, logout } = useAuthStore();
+  const router = useRouter();
   
   // Debug auth state
   useEffect(() => {
@@ -159,10 +161,10 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
       onStartChat();
     } else if (action === 'leads') {
       // Navigate to CRM leads page
-      window.location.href = '/crm/leads';
+      router.push('/crm/leads');
     } else if (action === 'crm') {
       // Navigate to CRM dashboard
-      window.location.href = '/crm';
+      router.push('/crm');
     } else {
       setSelectedAction(action);
     }
