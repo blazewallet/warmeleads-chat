@@ -75,7 +75,7 @@ export default function CRMDashboard() {
           name: user?.name || 'Unknown',
           createdAt: new Date(),
           lastActivity: new Date(),
-          status: 'active',
+          status: 'customer',
           source: 'direct',
           leadData: [],
           dataHistory: [],
