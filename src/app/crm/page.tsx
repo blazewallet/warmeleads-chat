@@ -83,9 +83,7 @@ export default function CRMDashboard() {
           googleSheetUrl: undefined,
           emailNotifications: {
             enabled: false,
-            newLeads: false,
-            orderUpdates: false,
-            support: false
+            newLeads: false
           },
           lastNotificationSent: undefined,
           orders: [],
