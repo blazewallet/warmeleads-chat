@@ -83,7 +83,7 @@ export interface Lead {
   budget?: string;
   timeline?: string;
   notes?: string;
-  status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
+  status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'converted' | 'lost';
   assignedTo?: string;
   createdAt: Date;
   updatedAt: Date;
