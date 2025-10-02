@@ -38,27 +38,55 @@ export default function CRMDashboard() {
     loadCRMData();
   }, [isAuthenticated, user, authLoading]);
 
-  const loadCRMData = () => {
-    const customers = crmSystem.getAllCustomers();
-    const customer = customers.find(c => c.email === user?.email);
-    
-    if (!customer) {
-      console.error('No customer found');
-      setIsLoading(false);
-      return;
-    }
+  const loadCRMData = async () => {
+    try {
+      // Try to load customer data from API first (persistent storage)
+      const response = await fetch('/api/customer-data');
+      if (response.ok) {
+        const { customers } = await response.json();
+        const customer = customers.find((c: any) => c.email === user?.email);
+        
+        if (customer) {
+          setCustomerData(customer);
+          setLeads(customer.leadData || []);
+          
+          // Generate branch analytics
+          if (customer.leadData && customer.leadData.length > 0) {
+            const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
+            setBranchAnalytics(analytics);
+            console.log('📊 CRM Branch analytics generated:', analytics);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // Fallback: Try localStorage CRM system
+      const customers = crmSystem.getAllCustomers();
+      const customer = customers.find(c => c.email === user?.email);
+      
+      if (!customer) {
+        console.error('No customer found in API or localStorage');
+        setIsLoading(false);
+        return;
+      }
 
-    setCustomerData(customer);
-    setLeads(customer.leadData || []);
-    
-    // Generate branch analytics
-    if (customer.leadData && customer.leadData.length > 0) {
-      const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
-      setBranchAnalytics(analytics);
-      console.log('📊 CRM Branch analytics generated:', analytics);
+      setCustomerData(customer);
+      setLeads(customer.leadData || []);
+      
+      // Generate branch analytics
+      if (customer.leadData && customer.leadData.length > 0) {
+        const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
+        setBranchAnalytics(analytics);
+        console.log('📊 CRM Branch analytics generated:', analytics);
+      }
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error loading CRM data:', error);
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   const handleNavigateToModule = (path: string) => {
