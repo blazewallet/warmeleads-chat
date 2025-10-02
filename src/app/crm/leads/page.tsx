@@ -30,6 +30,7 @@ import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { readCustomerLeads, GoogleSheetsService, updateLeadInSheet, addLeadToSheet } from '@/lib/googleSheetsAPI';
 import { branchIntelligence, type Branch, type BranchIntelligence, type BranchAnalytics } from '@/lib/branchIntelligence';
 import { useDataSync } from '@/lib/dataSyncService';
+import { PipelineBoard } from '@/components/PipelineBoard';
 
 export default function CustomerLeadsPage() {
   const router = useRouter();
@@ -46,6 +47,7 @@ export default function CustomerLeadsPage() {
   const [filterBranch, setFilterBranch] = useState<'all' | Branch>('all');
   const [branchAnalytics, setBranchAnalytics] = useState<BranchAnalytics[]>([]);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('pipeline');
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -443,6 +445,26 @@ export default function CustomerLeadsPage() {
     }
   };
 
+  // General update function for pipeline drag & drop
+  const handleUpdateLead = (leadId: string, updates: Partial<Lead>) => {
+    console.log(`🔄 Pipeline: Updating lead ${leadId} with:`, updates);
+    
+    if (customerData) {
+      const success = crmSystem.updateCustomerLead(customerData.id, leadId, updates);
+      if (success) {
+        setLeads(prev => prev.map(lead => 
+          lead.id === leadId ? { ...lead, ...updates, updatedAt: new Date() } : lead
+        ));
+        
+        // Update customer data to trigger refresh in other modules
+        const updatedCustomer = { ...customerData, leadData: leads };
+        setCustomerData(updatedCustomer);
+        
+        console.log(`✅ Pipeline: Lead ${leadId} updated successfully`);
+      }
+    }
+  };
+
   const handleDeleteLead = async (lead: Lead) => {
     if (!confirm(`Weet je zeker dat je "${lead.name}" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.`)) {
       return;
@@ -678,6 +700,30 @@ export default function CustomerLeadsPage() {
             </div>
 
             <div className="flex items-center space-x-3">
+              {/* View Mode Switcher */}
+              <div className="flex bg-white/10 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('pipeline')}
+                  className={`px-3 py-2 text-sm rounded-md transition-colors ${
+                    viewMode === 'pipeline'
+                      ? 'bg-white/20 text-white' 
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  Pipeline
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-2 text-sm rounded-md transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white/20 text-white' 
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  Lijst
+                </button>
+              </div>
+
               {/* Settings button */}
               <button
                 onClick={() => setShowSettings(true)}
@@ -1075,13 +1121,25 @@ export default function CustomerLeadsPage() {
           </motion.div>
         )}
 
-        {/* Leads Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden"
-        >
+        {/* Conditional Rendering: Pipeline vs List View */}
+        {viewMode === 'pipeline' ? (
+          <PipelineBoard 
+            leads={filteredLeads}
+            branch={filterBranch as Branch}
+            onLeadUpdate={handleUpdateLead}
+            onStageCreate={(stageName) => {
+              console.log(`Creating new stage: ${stageName}`);
+              // TODO: Implement stage creation
+            }}
+          />
+        ) : (
+          /* Leads Table */
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden"
+          >
           {paginatedLeads.length === 0 ? (
             <div className="text-center py-16">
               <UserIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -1553,6 +1611,7 @@ export default function CustomerLeadsPage() {
             </div>
           )}
         </motion.div>
+        )} {/* End of conditional rendering list vs pipeline */}
       </div>
 
       {/* Lead Detail Modal */}
