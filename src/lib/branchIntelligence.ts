@@ -143,7 +143,7 @@ class BranchIntelligenceEngine {
   }
 
   // Branch-specifieke aanbevelingen
-  private getBranchRecommendations(branch: Branch): string[] {
+  getBranchRecommendations(branch: Branch): string[] {
     const recommendations: Map<Branch, string[]> = new Map([
       ['Thuisbatterijen', [
         '📅 Plan bezichtiging voor zonnepanelen check',
@@ -185,7 +185,7 @@ class BranchIntelligenceEngine {
   }
 
   // Branch-specifieke inzichten
-  private getBranchInsights(branch: Branch, lead: Lead) {
+  getBranchInsights(branch: Branch, lead: Lead) {
     const insights: Map<Branch, any> = new Map([
       ['Thuisbatterijen', {
         avgConversionRate: lead.branchData?.koopintentie === 'Ja' ? 45 : 25,

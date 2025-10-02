@@ -120,7 +120,7 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
     
     pipelineStages.forEach(stage => {
       if (stage.aiPrompt) {
-        suggestions[stage.id] = branchIntelligence.getBranchRecommendations(stage.aiPrompt, [], branch);
+        suggestions[stage.id] = branchIntelligence.getBranchRecommendations(branch);
       }
     });
     
