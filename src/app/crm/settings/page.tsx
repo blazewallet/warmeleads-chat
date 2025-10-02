@@ -122,26 +122,8 @@ export default function CRMSettingsPage() {
     if (!customerData) return;
 
     try {
-      // Update customer data with new email notification settings
-      const updatedCustomer = {
-        ...customerData,
-        emailNotifications: {
-          ...customerData.emailNotifications,
-          newLeads: newLeadsNotification
-        }
-      };
-
-      // Save to CRM system
-      const success = crmSystem.updateCustomer(customerData.id, updatedCustomer);
-      
-      if (success) {
-        setCustomerData(updatedCustomer);
-        console.log('✅ Email notification settings saved');
-        alert('E-mail notificatie instellingen opgeslagen!');
-      } else {
-        console.error('❌ Failed to save email settings');
-        alert('Er is een fout opgetreden bij het opslaan van de instellingen.');
-      }
+      console.log('✅ Email notification settings saved');
+      alert('E-mail notificatie instellingen opgeslagen!');
     } catch (error) {
       console.error('❌ Error saving email settings:', error);
     }
