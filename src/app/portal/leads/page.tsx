@@ -211,6 +211,15 @@ export default function CustomerLeadsPage() {
             // Fallback to localStorage data
             setCustomerData(customer);
             setLeads(customer.leadData || []);
+            
+            // 🧠 Generate branch analytics for fallback data
+            if (customer.leadData && customer.leadData.length > 0) {
+              const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
+              setBranchAnalytics(analytics);
+              console.log('📊 Branch analytics generated (fallback):', analytics);
+            } else {
+              setBranchAnalytics([]);
+            }
           }
         }
         
@@ -942,6 +951,107 @@ export default function CustomerLeadsPage() {
           </div>
         </motion.div>
 
+        {/* Premium Branch Analytics Dashboard */}
+        {branchAnalytics.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-6 mb-8 shadow-xl text-white"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">🧠 Branch Intelligence Dashboard</h2>
+                <p className="text-white/80">AI-powered insights per branche - Better dan Salesforce!</p>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold">{branchAnalytics.length}</div>
+                <div className="text-white/80 text-sm">Actieve branches</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {(branchAnalytics.length > 0 ? branchAnalytics.slice(0, 4) : [
+                { branch: 'Thuisbatterijen', totalLeads: 12, revenue: 54000, conversionRate: 28.5, avgLeadValue: 4500, trends: { growth: 15 }, topPerformingFactors: ['Zonnepanelen eigenaar', 'Dynamisch contract', 'Hoog verbruik'] },
+                { branch: 'Financial Lease', totalLeads: 8, revenue: 360000, conversionRate: 37.5, avgLeadValue: 45000, trends: { growth: 22 }, topPerformingFactors: ['Bedrijfsomvang 10+', 'Krediet score A', 'Lease expertise'] },
+                { branch: 'Warmtepompen', totalLeads: 15, revenue: 172500, conversionRate: 33.3, avgLeadValue: 11500, trends: { growth: 8 }, topPerformingFactors: ['Goede isolatie', 'CV vervangen', 'Energie besparing'] },
+                { branch: 'Zonnepanelen', totalLeads: 6, revenue: 48000, conversionRate: 25.0, avgLeadValue: 8000, trends: { growth: 5 }, topPerformingFactors: ['Dak geschikt', 'Minimaal schaduw', 'Stijgende energieprijzen'] }
+              ]).map((analytics, index) => (
+                <motion.div
+                  key={analytics.branch}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.8 + index * 0.1 }}
+                  className="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/20 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-sm">
+                      {analytics.branch === 'Thuisbatterijen' && '🔋'}
+                      {analytics.branch === 'Financial Lease' && '🚗'}
+                      {analytics.branch === 'Warmtepompen' && '🔥'}
+                      {analytics.branch === 'Zonnepanelen' && '☀️'}
+                      {analytics.branch === 'Airco' && '❄️'}
+                      {analytics.branch === 'Custom' && '🎯'}
+                      {analytics.branch === 'Unknown' && '❓'}
+                      {' '}{analytics.branch}
+                    </h3>
+                    <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                      {analytics.conversionRate.toFixed(1)}%
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/70">Leads:</span>
+                      <span className="font-semibold">{analytics.totalLeads}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/70">Revenue:</span>
+                      <span className="font-semibold">€{Math.round(analytics.revenue / 1000)}K</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/70">Growth:</span>
+                      <span className={`font-semibold ${analytics.trends.growth > 0 ? 'text-green-300' : analytics.trends.growth < 0 ? 'text-red-300' : 'text-white/70'}`}>
+                        {analytics.trends.growth > 0 ? '+' : ''}{analytics.trends.growth}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/70">AVG Lead:</span>
+                      <span className="font-semibold">€{Math.round(analytics.avgLeadValue)}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Top Performing Factors */}
+            <div className="mt-6 pt-6 border-t border-white/20">
+              <h3 className="text-lg font-semibold mb-4">🎯 Top Performing Factors</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {branchAnalytics.map((analytics, index) => (
+                  <div key={analytics.branch} className="bg-white/5 rounded-lg p-4">
+                    <h4 className="font-semibold text-sm mb-2">
+                      {analytics.branch === 'Thuisbatterijen' && '🔋'}
+                      {analytics.branch === 'Financial Lease' && '🚗'}
+                      {analytics.branch === 'Warmtepompen' && '🔥'}
+                      {analytics.branch === 'Zonnepanelen' && '☀️'}
+                      {analytics.branch === 'Airco' && '❄️'}
+                      {analytics.branch === 'Custom' && '🎯'}
+                      {analytics.branch === 'Unknown' && '❓'}
+                      {' '}{analytics.branch}
+                    </h4>
+                    <div className="text-xs text-white/70">
+                      {analytics.topPerformingFactors.slice(0, 3).map((factor, i) => (
+                        <div key={i} className="py-1">• {factor}</div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Leads Table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1000,6 +1110,32 @@ export default function CustomerLeadsPage() {
                             <span className="text-xs text-gray-300">•</span>
                             <span className="text-xs text-gray-400">{new Date(lead.updatedAt).toLocaleDateString('nl-NL')}</span>
                           </div>
+                          
+                          {/* 🧠 AI Branch Detection Badge */}
+                          {(() => {
+                            const intelligence = branchIntelligence.detectBranch(lead);
+                            const branchIcon = intelligence.detectedBranch === 'Thuisbatterijen' ? '🔋' :
+                                             intelligence.detectedBranch === 'Financial Lease' ? '🚗' :
+                                             intelligence.detectedBranch === 'Warmtepompen' ? '🔥' :
+                                             intelligence.detectedBranch === 'Zonnepanelen' ? '☀️' :
+                                             intelligence.detectedBranch === 'Airco' ? '❄️' :
+                                             intelligence.detectedBranch === 'Custom' ? '🎯' : '❓';
+                            
+                            return (
+                              <div className="mt-2">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  intelligence.detectedBranch === 'Thuisbatterijen' ? 'bg-yellow-100 text-yellow-800' :
+                                  intelligence.detectedBranch === 'Financial Lease' ? 'bg-green-100 text-green-800' :
+                                  intelligence.detectedBranch === 'Warmtepompen' ? 'bg-red-100 text-red-800' :
+                                  intelligence.detectedBranch === 'Zonnepanelen' ? 'bg-orange-100 text-orange-800' :
+                                  intelligence.detectedBranch === 'Airco' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {branchIcon} {intelligence.detectedBranch} ({intelligence.confidence}%)
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
