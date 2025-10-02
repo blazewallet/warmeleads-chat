@@ -11,8 +11,8 @@ export default function PortalPage() {
     router.push('/');
   };
 
-  const handleStartChat = (context: string) => {
-    router.push(`/?chat=${context}`);
+  const handleStartChat = () => {
+    router.push('/?chat=direct');
   };
 
   return (
