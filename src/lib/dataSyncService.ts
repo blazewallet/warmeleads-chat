@@ -163,7 +163,7 @@ class DataSyncService {
     
     // Update in CRM system
     const { crmSystem } = await import('./crmSystem');
-    crmSystem.updateLead(this.unifiedState.customer.id, leadId, updates);
+    crmSystem.updateCustomerLead(this.unifiedState.customer.id, leadId, updates);
 
     // Trigger refresh to get updated data
     await this.refreshAllData(this.unifiedState.customer.email);
@@ -181,7 +181,7 @@ class DataSyncService {
     
     // Remove from CRM system
     const { crmSystem } = await import('./crmSystem');
-    crmSystem.deleteLead(this.unifiedState.customer.id, leadId);
+    crmSystem.removeLeadFromCustomer(this.unifiedState.customer.id, leadId);
 
     // Trigger refresh to get updated data
     await this.refreshAllData(this.unifiedState.customer.email);
