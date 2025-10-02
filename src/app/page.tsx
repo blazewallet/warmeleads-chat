@@ -35,6 +35,13 @@ export default function HomePage() {
     }
   }, []);
 
+  // Auth check - redirect to portal if user is logged in and on homepage
+  useEffect(() => {
+    if (isAuthenticated && currentPage === 'landing') {
+      window.location.href = '/portal';
+    }
+  }, [isAuthenticated, currentPage]);
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">

@@ -2,23 +2,20 @@
 
 import React from 'react';
 import { CustomerPortal } from '@/components/CustomerPortal';
+import { useRouter } from 'next/navigation';
 
 export default function PortalPage() {
+  const router = useRouter();
+
   const handleBackToHome = () => {
-    // This shouldn't be needed since we're in the portal
-    // But keeping it for compatibility
-    window.location.href = '/';
+    router.push('/');
   };
 
-  const handleStartChat = (context: string = 'customer') => {
-    // Start chat from portal
-    window.location.href = '/?chat=' + context;
+  const handleStartChat = (context: string) => {
+    router.push(`/?chat=${context}`);
   };
 
   return (
-    <CustomerPortal 
-      onBackToHome={handleBackToHome} 
-      onStartChat={() => handleStartChat('customer')} 
-    />
+    <CustomerPortal onBackToHome={handleBackToHome} onStartChat={handleStartChat} />
   );
 }
