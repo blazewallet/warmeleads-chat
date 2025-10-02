@@ -85,7 +85,6 @@ export default function CRMDashboard() {
             enabled: false,
             newLeads: false
           },
-          lastNotificationSent: undefined,
           orders: [],
           openInvoices: [],
           hasAccount: true
