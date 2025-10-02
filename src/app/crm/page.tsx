@@ -8,12 +8,9 @@ import {
   UserGroupIcon,
   CogIcon,
   ArrowRightIcon,
-  PlusIcon,
-  FunnelIcon,
   TrendingUpIcon,
   TrendingDownIcon,
-  ClockIcon,
-  CurrencyEuroIcon
+  ClockIcon
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
@@ -72,8 +69,8 @@ export default function CRMDashboard() {
     converted: leads.filter(l => l.status === 'converted').length,
     conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted').length / leads.length * 100) : 0,
     totalRevenue: branchAnalytics.reduce((sum, analytics) => sum + analytics.revenue, 0),
-    avgLeadValue: branchAnalytics.reduce((sum, analytics) => sum + analytics.avgLeadValue, 0) / Math.max(branchAnalytics.length, 1),
-    totalGrowth: branchAnalytics.length > 0 ? branchAnalytics.reduce((sum, analytics) => sum + analytics.trends.growth, 0) / branchAnalytics.length : 0
+    avgLeadValue: branchAnalytics.reduce((sum: number, analytics) => sum + analytics.avgLeadValue, 0) / Math.max(branchAnalytics.length, 1),
+    totalGrowth: branchAnalytics.length > 0 ? branchAnalytics.reduce((sum: number, analytics) => sum + analytics.trends.growth, 0) / branchAnalytics.length : 0
   };
 
   if (authLoading || isLoading) {
@@ -219,7 +216,7 @@ export default function CRMDashboard() {
                     </div>
                   </div>
                   
-                  <div className="space-y-3">
+                  <div className="space-x-3">
                     <div className="flex justify-between items-center">
                       <span className="text-white/70 text-sm">Leads:</span>
                       <span className="font-bold text-white">{analytics.totalLeads}</span>
@@ -263,7 +260,7 @@ export default function CRMDashboard() {
               </div>
               
               <div className="text-center">
-                <div className="text-3xl font-bold text-purple-400 mb-1">{overallStats.conversionRate.toFixed(1)}%</div<｜tool▁calls▁end｜> 
+                <div className="text-3xl font-bold text-purple-400 mb-1">{overallStats.conversionRate.toFixed(1)}%</div>
                 <div className="text-sm text-white/70">Conversion Rate</div>
               </div>
               

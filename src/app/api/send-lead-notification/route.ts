@@ -3,8 +3,8 @@ import { Resend } from 'resend';
 
 // API route voor het versturen van email notificaties over nieuwe leads
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+//
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build');
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeftIcon,
@@ -11,13 +11,11 @@ import {
   UserIcon,
   PhoneIcon,
   EnvelopeIcon,
-  ChartBarIcon,
-  CogIcon
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { branchIntelligence, type Branch } from '@/lib/branchIntelligence';
-import { readCustomerLeads, GoogleSheetsService, updateLeadInSheet, addLeadToSheet } from '@/lib/googleSheetsAPI';
 
 export default function CRMLeadsPage() {
   const router = useRouter();
@@ -30,8 +28,6 @@ export default function CRMLeadsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | Lead['status']>('all');
   const [filterBranch, setFilterBranch] = useState<'all' | Branch>('all');
-  const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -116,26 +112,6 @@ export default function CRMLeadsPage() {
     }
   };
 
-  const handleUpdateLeadStatus = (leadId: string, newStatus: Lead['status']) => {
-    const updatedLeads = leads.map(lead => 
-      lead.id === leadId 
-        ? { ...lead, status: newStatus, updatedAt: new Date().toISOString() }
-        : lead
-    );
-    
-    setLeads(updatedLeads);
-    
-    // Update in CRM system
-    if (customerData) {
-      crmSystem.updateCustomer({
-        ...customerData,
-        leadData: updatedLeads
-      });
-    }
-    
-    console.log(`Updated lead ${leadId} status to ${newStatus}`);
-  };
-
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
@@ -173,7 +149,6 @@ export default function CRMLeadsPage() {
               </button>
               
               <button
-                onClick={() => setShowAddForm(true)}
                 className="bg-green-600/80 hover:bg-green-600 text-white px-4 py-2 rounded-xl transition-colors flex items-center space-x-2"
               >
                 <PlusIcon className="w-5 h-5" />
@@ -265,7 +240,6 @@ export default function CRMLeadsPage() {
                 }
               </p>
               <button
-                onClick={() => setShowAddForm(true)}
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors"
               >
                 ➕ Voeg uw eerste lead toe
@@ -298,8 +272,6 @@ export default function CRMLeadsPage() {
                   
                   {/* Status Badge */}
                   <select
-                    value={lead.status}
-                    onChange={(e) => handleUpdateLeadStatus(lead.id, e.target.value as Lead['status'])}
                     className={`px-3 py-1 rounded-full text-xs font-semibold border-0 ${getStatusColor(lead.status)} cursor-pointer`}
                   >
                     <option value="new">🆕 Nieuw</option>
@@ -382,7 +354,6 @@ export default function CRMLeadsPage() {
                     📧 E-mail
                   </a>
                   <button
-                    onClick={() => setEditingLead(lead)}
                     className="flex-1 bg-purple-600/80 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-center text-sm font-medium transition-colors"
                   >
                     ✏️ Bewerk
@@ -392,35 +363,6 @@ export default function CRMLeadsPage() {
             ))
           )}
         </motion.div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-8 flex justify-center items-center space-x-4"
-          >
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
-              Vorige
-            </button>
-            
-            <span className="text-white/70">
-              Pagina {currentPage} van {totalPages}
-            </span>
-            
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
-              Volgende
-            </button>
-          </motion.div>
-        )}
 
       </div>
     </div>
