@@ -158,8 +158,8 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
     if (action === 'reorder' || action === 'support') {
       onStartChat();
     } else if (action === 'leads') {
-      // Navigate to working leads page (using existing fully functional leads portal)
-      window.location.href = '/portal/leads';
+      // Navigate to CRM leads page
+      window.location.href = '/crm/leads';
     } else if (action === 'crm') {
       // Navigate to CRM dashboard
       window.location.href = '/crm';

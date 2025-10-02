@@ -31,12 +31,12 @@ export default function CRMDashboard() {
     if (authLoading) return;
     
     if (!isAuthenticated || !user?.email) {
-      window.location.href = '/';
+      router.push('/');
       return;
     }
     
     loadCRMData();
-  }, [isAuthenticated, user, authLoading]);
+  }, [isAuthenticated, user, authLoading, router]);
 
   const loadCRMData = async () => {
     try {
@@ -68,6 +68,28 @@ export default function CRMDashboard() {
       
       if (!customer) {
         console.error('No customer found in API or localStorage');
+        // Initialize empty customer data to prevent redirect loop
+        const emptyCustomer = {
+          id: user?.email || 'temp',
+          email: user?.email || '',
+          name: user?.name || 'Unknown',
+          createdAt: new Date(),
+          lastActivity: new Date(),
+          leadData: [],
+          dataHistory: [],
+          chatHistory: [],
+          googleSheetUrl: undefined,
+          emailNotifications: {
+            enabled: false,
+            newLeads: false,
+            orderUpdates: false,
+            support: false
+          },
+          lastNotificationSent: undefined
+        };
+        setCustomerData(emptyCustomer);
+        setLeads([]);
+        setBranchAnalytics([]);
         setIsLoading(false);
         return;
       }
