@@ -15,10 +15,14 @@ import {
 import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { branchIntelligence, type BranchAnalytics } from '@/lib/branchIntelligence';
+import { useDataSync } from '@/lib/dataSyncService';
 
 export default function CRMDashboard() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  
+  // 🔄 UNIFIED DATA SYNC - Alle modules gebruiken nu dezelfde data!
+  const dataSync = useDataSync(user?.email);
   
   // CRM Data state
   const [customerData, setCustomerData] = useState<Customer | null>(null);
@@ -35,8 +39,24 @@ export default function CRMDashboard() {
       return;
     }
     
-    loadCRMData();
+    // loadCRMData(); // Replaced by unified data sync
   }, [isAuthenticated, user, authLoading, router]);
+
+  // 🔄 UNIFIED DATA SYNC - Automatische sync tussen alle modules
+  useEffect(() => {
+    if (dataSync.customer && !dataSync.isLoading) {
+      console.log(`🔄 CRM Dashboard: Data synced - ${dataSync.leads.length} leads`);
+      
+      // Update local state vanuit unified sync
+      setCustomerData(dataSync.customer);
+      setLeads(dataSync.leads);
+      setBranchAnalytics(dataSync.branchAnalytics);
+      setIsLoading(false);
+    } else if (dataSync.error) {
+      console.error('❌ CRM Dashboard: DataSync error:', dataSync.error);
+      setIsLoading(false);
+    }
+  }, [dataSync.customer, dataSync.leads, dataSync.branchAnalytics, dataSync.isLoading]);
 
   const loadCRMData = async () => {
     try {

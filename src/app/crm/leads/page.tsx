@@ -29,10 +29,15 @@ import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { readCustomerLeads, GoogleSheetsService, updateLeadInSheet, addLeadToSheet } from '@/lib/googleSheetsAPI';
 import { branchIntelligence, type Branch, type BranchIntelligence, type BranchAnalytics } from '@/lib/branchIntelligence';
+import { useDataSync } from '@/lib/dataSyncService';
 
 export default function CustomerLeadsPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  
+  // 🔄 UNIFIED DATA SYNC - Alle modules gebruiken nu dezelfde data!
+  const dataSync = useDataSync(user?.email);
+  
   const [customerData, setCustomerData] = useState<Customer | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -157,6 +162,24 @@ export default function CustomerLeadsPage() {
     const timer = setTimeout(checkAuth, 500);
     return () => clearTimeout(timer);
   }, [router, authLoading, isAuthenticated, user]);
+
+  // 🔄 UNIFIED DATA SYNC - Automatische sync met CRM Dashboard
+  useEffect(() => {
+    if (dataSync.customer && !dataSync.isLoading) {
+      console.log(`🔄 Leads Portal: Data synced - ${dataSync.leads.length} leads`);
+      
+      // Update local state vanuit unified sync
+      setCustomerData(dataSync.customer);
+      setLeads(dataSync.leads);
+      setBranchAnalytics(dataSync.branchAnalytics);
+      setIsLoading(false);
+      
+      console.log(`✅ Leads Portal synced - CRM Dashboard heeft ${dataSync.leads.length}, Portal heeft ${leads.length} leads`);
+    } else if (dataSync.error) {
+      console.error('❌ Leads Portal: DataSync error:', dataSync.error);
+      setIsLoading(false);
+    }
+  }, [dataSync.customer, dataSync.leads, dataSync.branchAnalytics, dataSync.isLoading]);
 
   // Load customer data and leads from blob storage
   useEffect(() => {
