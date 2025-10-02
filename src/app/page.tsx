@@ -125,7 +125,7 @@ export default function HomePage() {
   };
 
   const handleLoginSuccess = () => {
-    setCurrentPage('customer');
+    window.location.href = '/portal';
   };
 
   const handleGuestSuccess = () => {
@@ -133,7 +133,7 @@ export default function HomePage() {
   };
 
   const handleAccountCreationSuccess = () => {
-    setCurrentPage('customer');
+    window.location.href = '/portal';
   };
 
   const handleBackToHome = () => {
