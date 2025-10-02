@@ -206,7 +206,7 @@ export default function CRMAnalyticsPage() {
                 className="bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
               >
                 <option value="week" className="bg-gray-800">Laatste week</option>
-                <option value="month" className="bg-gray-800">Laatste maand</option<｜tool▁calls▁end｜>>
+                <option value="month" className="bg-gray-800">Laatste maand</option｜tool▁calls▁end｜>>
                 <option value="quarter" className="bg-gray-800">Laatste kwartaal</option>
                 <option value="year" className="bg-gray-800">Laatste jaar</option>
               </select>
