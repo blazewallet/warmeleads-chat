@@ -78,11 +78,34 @@ export async function GET(request: NextRequest) {
         const sheetLeads = await readCustomerLeads(googleSheetUrl);
         const existingLeads = customer.leadData || [];
         
-        // Vind nieuwe leads
+        // Smart nieuwe leads detectie: combineer rijnummer en lead content
         const existingRowNumbers = new Set(existingLeads.map((lead: any) => lead.sheetRowNumber));
-        const newLeads = sheetLeads.filter(sheetLead => 
-          sheetLead.sheetRowNumber && !existingRowNumbers.has(sheetLead.sheetRowNumber)
+        
+        // Maak een Set van bestaande leads voor content-based duplicate detection
+        const existingLeadSignatures = new Set(
+          existingLeads.map((lead: any) => 
+            `${lead.name?.toLowerCase().trim()}|${lead.email?.toLowerCase().trim()}|${lead.phone?.trim()}`
+          )
         );
+        
+        const newLeads = sheetLeads.filter(sheetLead => {
+          // Skip als dit geen geldige lead data is
+          if (!sheetLead.name || !sheetLead.email) return false;
+          
+          // Maak signature voor deze lead
+          const signature = `${sheetLead.name.toLowerCase().trim()}|${sheetLead.email.toLowerCase().trim()}|${sheetLead.phone?.trim() || ''}`;
+          
+          // Check of dit een nieuwe rij nummer is (standaard methode)
+          const isNewRowNumber = sheetLead.sheetRowNumber && !existingRowNumbers.has(sheetLead.sheetRowNumber);
+          
+          // Check of dit een nieuwe lead content is (voor deleted-middle scenarios)
+          const isNewContent = !existingLeadSignatures.has(signature);
+          
+          // Een lead is nieuw als:
+          // 1. Het een nieuwe rij nummer heeft (standaard geval)
+          // 2. Het een andere content heeft dan bestaande leads (voor hergebruikte rijen)
+          return isNewRowNumber || isNewContent;
+        });
         
         console.log(`📊 Sheet leads found: ${sheetLeads.length}`);
         console.log(`📊 Existing leads in CRM: ${existingLeads.length}`);
@@ -97,6 +120,8 @@ export async function GET(request: NextRequest) {
           
           // Voeg nieuwe leads toe aan CRM en verstuur aparte email per lead
           for (const leadData of newLeads) {
+            console.log(`🔍 Processing new lead: ${leadData.name} (Row ${leadData.sheetRowNumber})`);
+            
             const leadToAdd = {
               name: leadData.name,
               email: leadData.email,
