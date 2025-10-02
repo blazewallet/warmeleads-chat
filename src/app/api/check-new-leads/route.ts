@@ -84,6 +84,11 @@ export async function GET(request: NextRequest) {
           sheetLead.sheetRowNumber && !existingRowNumbers.has(sheetLead.sheetRowNumber)
         );
         
+        console.log(`📊 Sheet leads found: ${sheetLeads.length}`);
+        console.log(`📊 Existing leads in CRM: ${existingLeads.length}`);
+        console.log(`📊 Existing row numbers: ${Array.from(existingRowNumbers).sort().join(', ')}`);
+        console.log(`📊 New leads count: ${newLeads.length}`);
+        
         if (newLeads.length > 0) {
           console.log(`🆕 Found ${newLeads.length} new leads for ${customer.email}`);
           
@@ -187,7 +192,7 @@ export async function GET(request: NextRequest) {
             emailsFailed
           });
         } else {
-          console.log(`ℹ️ No new leads for ${customer.email}`);
+          console.log(`ℹ️ No new leads for ${customer.email} - all sheet leads already exist in CRM`);
         }
       } catch (error) {
         console.error(`❌ Error checking leads for ${customer.email}:`, error);
