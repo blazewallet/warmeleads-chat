@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { put, get, del } from '@vercel/blob';
+import { put, del } from '@vercel/blob';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -17,23 +17,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
   }
 
-  try {
-    const blobName = `user-preferences/${customerId}.json`;
-    
     try {
-      const blob = await get(blobName);
-      const preferences = await blob.json();
-      return NextResponse.json({ preferences });
-    } catch (error) {
-      // No preferences found, return defaults
-      return NextResponse.json({ 
-        preferences: {
-          viewMode: 'list', // Default to list view
-          theme: 'dark',
-          notifications: true
+      const blobName = `user-preferences/${customerId}.json`;
+      
+      try {
+        // Try to fetch the blob using fetch instead of get
+        const response = await fetch(`https://blob.vercel-storage.com/${blobName}`);
+        if (response.ok) {
+          const preferences = await response.json();
+          return NextResponse.json({ preferences });
+        } else {
+          throw new Error('Blob not found');
         }
-      });
-    }
+      } catch (error) {
+        // No preferences found, return defaults
+        return NextResponse.json({ 
+          preferences: {
+            viewMode: 'list', // Default to list view
+            theme: 'dark',
+            notifications: true
+          }
+        });
+      }
   } catch (error) {
     console.error('Error fetching user preferences:', error);
     return NextResponse.json({ error: 'Failed to fetch preferences' }, { status: 500 });
