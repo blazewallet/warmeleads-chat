@@ -77,9 +77,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Customer ID and config are required' }, { status: 400 });
     }
 
-    // Validate config
-    if (!config.businessName) {
-      return NextResponse.json({ error: 'Business name is required' }, { status: 400 });
+    // Validate config - make businessName optional for now
+    if (!config.businessName || config.businessName.trim() === '') {
+      console.log('⚠️ Business name is empty, using default');
+      config.businessName = 'WarmeLeads';
     }
 
     // If customer wants to use own number, check if setup is paid
