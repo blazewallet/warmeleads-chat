@@ -187,18 +187,18 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex space-x-4 overflow-x-auto pb-4">
+        <div className="flex space-x-6 overflow-x-auto pb-6 px-2">
           <AnimatePresence>
             {pipelineStages
               .sort((a, b) => a.order - b.order)
               .map((stage, index) => (
-                <div key={stage.id} className="flex-shrink-0 w-80">
+                <div key={stage.id} className="flex-shrink-0 w-72 md:w-80">
                   <Droppable droppableId={stage.id}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`rounded-2xl p-4 min-h-[600px] transition-all duration-200 ${
+                        className={`rounded-2xl p-4 min-h-[500px] md:min-h-[600px] transition-all duration-200 ${
                           snapshot.isDraggingOver 
                             ? 'bg-white/20 border-2 border-dashed border-white/50' 
                             : 'bg-white/10 border border-white/20'

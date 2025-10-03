@@ -15,14 +15,10 @@ import {
 import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { branchIntelligence, type BranchAnalytics } from '@/lib/branchIntelligence';
-import { useDataSync } from '@/lib/dataSyncService';
 
 export default function CRMDashboard() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
-  
-  // 🔄 UNIFIED DATA SYNC - Alle modules gebruiken nu dezelfde data!
-  const dataSync = useDataSync(user?.email);
   
   // CRM Data state
   const [customerData, setCustomerData] = useState<Customer | null>(null);
@@ -39,81 +35,29 @@ export default function CRMDashboard() {
       return;
     }
     
-    // loadCRMData(); // Replaced by unified data sync
+    loadCRMData();
   }, [isAuthenticated, user, authLoading, router]);
 
-  // 🔄 UNIFIED DATA SYNC - Automatische sync tussen alle modules
-  useEffect(() => {
-    if (dataSync.customer && !dataSync.isLoading) {
-      console.log(`🔄 CRM Dashboard: Data synced - ${dataSync.leads.length} leads`);
-      
-      // Update local state vanuit unified sync
-      setCustomerData(dataSync.customer);
-      setLeads(dataSync.leads);
-      setBranchAnalytics(dataSync.branchAnalytics);
-      setIsLoading(false);
-    } else if (dataSync.error) {
-      console.error('❌ CRM Dashboard: DataSync error:', dataSync.error);
-      setIsLoading(false);
-    }
-  }, [dataSync.customer, dataSync.leads, dataSync.branchAnalytics, dataSync.isLoading]);
-
+  // Load CRM data
   const loadCRMData = async () => {
+    setIsLoading(true);
+    
+    let customer: Customer | null = null;
     try {
-      // Try to load customer data from API first (persistent storage)
       const response = await fetch('/api/customer-data');
       if (response.ok) {
         const { customers } = await response.json();
-        const customer = customers.find((c: any) => c.email === user?.email);
-        
-        if (customer) {
-          setCustomerData(customer);
-          setLeads(customer.leadData || []);
-          
-          // Generate branch analytics
-          if (customer.leadData && customer.leadData.length > 0) {
-            const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
-            setBranchAnalytics(analytics);
-            console.log('📊 CRM Branch analytics generated:', analytics);
-          }
-          
-          setIsLoading(false);
-          return;
-        }
+        customer = customers.find((c: any) => c.email === user?.email);
+        console.log('✅ CRM Dashboard: Customer data fetched from API.');
+      } else {
+        console.log('ℹ️ CRM Dashboard: API fetch failed, falling back to localStorage.');
+        // Fallback to localStorage if API fails or no data
+        const allCustomers = crmSystem.getAllCustomers();
+        customer = allCustomers.find(c => c.email === user?.email) || null;
       }
-      
-      // Fallback: Try localStorage CRM system
-      const customers = crmSystem.getAllCustomers();
-      const customer = customers.find(c => c.email === user?.email);
-      
+
       if (!customer) {
-        console.error('No customer found in API or localStorage');
-        // Initialize empty customer data to prevent redirect loop
-        const emptyCustomer: Customer = {
-          id: user?.email || 'temp',
-          email: user?.email || '',
-          name: user?.name || 'Unknown',
-          createdAt: new Date(),
-          lastActivity: new Date(),
-          status: 'customer',
-          source: 'direct',
-          leadData: [],
-          dataHistory: [],
-          chatHistory: [],
-          googleSheetUrl: undefined,
-          emailNotifications: {
-            enabled: false,
-            newLeads: false
-          },
-          orders: [],
-          openInvoices: [],
-          hasAccount: true
-        };
-        setCustomerData(emptyCustomer);
-        setLeads([]);
-        setBranchAnalytics([]);
-        setIsLoading(false);
-        return;
+        throw new Error('Customer not found.');
       }
 
       setCustomerData(customer);
@@ -123,192 +67,175 @@ export default function CRMDashboard() {
       if (customer.leadData && customer.leadData.length > 0) {
         const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
         setBranchAnalytics(analytics);
-        console.log('📊 CRM Branch analytics generated:', analytics);
       }
       
       setIsLoading(false);
+      console.log('✅ CRM Dashboard: Data loaded successfully');
     } catch (error) {
-      console.error('Error loading CRM data:', error);
+      console.error('❌ CRM Dashboard: Error loading data:', error);
       setIsLoading(false);
     }
   };
 
-  const handleNavigateToModule = (path: string) => {
-    router.push(path);
-  };
-
-  // Calculate overall stats
-  const overallStats = {
-    totalLeads: leads.length,
+  // Calculate stats
+  const stats = {
+    total: leads.length,
+    new: leads.filter(l => l.status === 'new').length,
+    contacted: leads.filter(l => l.status === 'contacted').length,
+    qualified: leads.filter(l => l.status === 'qualified').length,
     converted: leads.filter(l => l.status === 'converted').length,
-    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted').length / leads.length * 100) : 0,
-    totalRevenue: branchAnalytics.reduce((sum, analytics) => sum + analytics.revenue, 0),
-    avgLeadValue: branchAnalytics.reduce((sum: number, analytics) => sum + analytics.avgLeadValue, 0) / Math.max(branchAnalytics.length, 1),
-    totalGrowth: branchAnalytics.length > 0 ? branchAnalytics.reduce((sum: number, analytics) => sum + analytics.trends.growth, 0) / branchAnalytics.length : 0
+    lost: leads.filter(l => l.status === 'lost').length,
+    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted').length / leads.length) * 100 : 0
   };
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl">CRM Dashboard laden...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
       {/* Header */}
       <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white">CRM Dashboard</h1>
+              <p className="text-white/70 mt-2">Overzicht van je leads en prestaties</p>
+            </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => router.push('/portal')}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                onClick={() => router.push('/crm/leads')}
+                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
               >
-                <ArrowRightIcon className="w-6 h-6 text-white rotate-180" />
+                <UserGroupIcon className="w-5 h-5" />
+                <span>Mijn Leads</span>
               </button>
-              <div>
-                <h1 className="text-2xl font-bold text-white">🏢 CRM Dashboard</h1>
-                <p className="text-white/80 text-sm">Enterprise-grade lead & branch beheer</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <div className="text-right text-white">
-                <div className="text-sm font-medium">{user?.name}</div>
-                <div className="text-xs text-white/70">{user?.email}</div>
-              </div>
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">{user?.name?.charAt(0)}</span>
-              </div>
+              <button
+                onClick={() => router.push('/crm/analytics')}
+                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <ChartBarIcon className="w-5 h-5" />
+                <span>Analytics</span>
+              </button>
+              <button
+                onClick={() => router.push('/crm/settings')}
+                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <CogIcon className="w-5 h-5" />
+                <span>Instellingen</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        
-        {/* Quick Navigation Cards */}
+      <div className="max-w-7xl mx-auto px-6 py-12">
+        {/* Stats Overview */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+          transition={{ duration: 0.5 }}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12"
         >
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            onClick={() => handleNavigateToModule('/crm/leads')}
-            className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 cursor-pointer hover:bg-white/20 transition-all group"
-          >
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <UserGroupIcon className="w-8 h-8 text-blue-400" />
-              <ArrowRightIcon className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <UserGroupIcon className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-white">{stats.total}</div>
+                <div className="text-xs text-white/60">Totaal Leads</div>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Leads Beheer</h3>
-            <p className="text-white/70 text-sm mb-3">Beheer je leads met AI-gebaseerde branch detectie</p>
-            <div className="text-2xl font-bold text-blue-400">{overallStats.totalLeads}</div>
-            <div className="text-xs text-white/60">Totaal leads</div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            onClick={() => handleNavigateToModule('/crm/analytics')}
-            className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 cursor-pointer hover:bg-white/20 transition-all group"
-          >
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <ChartBarIcon className="w-8 h-8 text-purple-400" />
-              <ArrowRightIcon className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
+              <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                <ArrowUpIcon className="w-6 h-6 text-green-400" />
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-white">{stats.converted}</div>
+                <div className="text-xs text-white/60">Geconverteerd</div>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Geavanceerde Analytics</h3>
-            <p className="text-white/70 text-sm mb-3">Gedetailleerde branch prestaties & trends</p>
-            <div className="text-2xl font-bold text-purple-400">{overallStats.conversionRate.toFixed(1)}%</div>
-            <div className="text-xs text-white/60">Conversie rate</div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            onClick={() => handleNavigateToModule('/crm/settings')}
-            className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 cursor-pointer hover:bg-white/20 transition-all group"
-          >
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <CogIcon className="w-8 h-8 text-green-400" />
-              <ArrowRightIcon className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
+              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                <ChartBarIcon className="w-6 h-6 text-purple-400" />
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-white">{stats.conversionRate.toFixed(1)}%</div>
+                <div className="text-xs text-white/60">Conversie Rate</div>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Instellingen & Configuratie</h3>
-            <p className="text-white/70 text-sm mb-3">Configureer branch instellingen & integraties</p>
-            <div className="text-2xl font-bold text-green-400">{branchAnalytics.length}</div>
-            <div className="text-xs text-white/60">Actieve branches</div>
-          </motion.div>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                <ClockIcon className="w-6 h-6 text-orange-400" />
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-white">{stats.new}</div>
+                <div className="text-xs text-white/60">Nieuwe Leads</div>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
-        {/* Branch Intelligence Overview */}
+        {/* Branch Analytics */}
         {branchAnalytics.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-8"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-white">🧠 Branch Intelligence Overzicht</h2>
-              <button
-                onClick={() => handleNavigateToModule('/crm/analytics')}
-                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl transition-colors flex items-center space-x-2"
-              >
-                <span>Bekijk Analytics</span>
-                <ArrowRightIcon className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {branchAnalytics.map((analytics, index) => (
+            <h2 className="text-2xl font-bold text-white mb-6">Branch Prestaties</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {branchAnalytics.slice(0, 6).map((analytics, index) => (
                 <motion.div
                   key={analytics.branch}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.4 + index * 0.1 }}
-                  className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 hover:bg-white/20 transition-all"
+                  transition={{ delay: 0.3 + index * 0.1 }}
+                  className="bg-white/5 rounded-xl p-4 border border-white/10"
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-white text-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-white text-sm">
                       {analytics.branch === 'Thuisbatterijen' && '🔋'}
                       {analytics.branch === 'Financial Lease' && '🚗'}
                       {analytics.branch === 'Warmtepompen' && '🔥'}
                       {analytics.branch === 'Zonnepanelen' && '☀️'}
                       {analytics.branch === 'Airco' && '❄️'}
-                      {analytics.branch === 'Custom' && '🎯'}
                       {' '}{analytics.branch}
                     </h3>
-                    <div className={`flex items-center space-x-1 text-xs px-2 py-1 rounded-full ${
-                      analytics.trends.growth > 0 ? 'bg-green-100 text-green-800' : 
-                      analytics.trends.growth < 0 ? 'bg-red-100 text-red-800' : 
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {analytics.trends.growth > 0 ? <ArrowUpIcon className="w-3 h-3" /> : 
-                       analytics.trends.growth < 0 ? <ArrowDownIcon className="w-3 h-3" /> :
-                       <ClockIcon className="w-3 h-3" />}
-                      <span>{analytics.trends.growth > 0 ? '+' : ''}{analytics.trends.growth}%</span>
-                    </div>
+                    <span className="text-xs bg-white/20 px-2 py-1 rounded-full text-white">
+                      {analytics.conversionRate.toFixed(1)}%
+                    </span>
                   </div>
-                  
-                  <div className="space-x-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/70 text-sm">Leads:</span>
-                      <span className="font-bold text-white">{analytics.totalLeads}</span>
+                  <div className="space-y-2 text-xs text-white/70">
+                    <div className="flex justify-between">
+                      <span>Leads:</span>
+                      <span className="text-white">{analytics.totalLeads}</span>
                     </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/70 text-sm">Conversie:</span>
-                      <span className="font-bold text-purple-400">{analytics.conversionRate.toFixed(1)}%</span>
+                    <div className="flex justify-between">
+                      <span>Omzet:</span>
+                      <span className="text-white">€{Math.round(analytics.totalRevenue)}</span>
                     </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/70 text-sm">Omzet:</span>
-                      <span className="font-bold text-green-400">€{Math.round(analytics.revenue / 1000)}K</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/70 text-sm">Gem. Lead:</span>
-                      <span className="font-bold text-blue-400">€{Math.round(analytics.avgLeadValue)}</span>
+                    <div className="flex justify-between">
+                      <span>Gem. waarde:</span>
+                      <span className="text-white">€{Math.round(analytics.avgLeadValue)}</span>
                     </div>
                   </div>
                 </motion.div>
@@ -317,40 +244,61 @@ export default function CRMDashboard() {
           </motion.div>
         )}
 
-        {/* Overall Performance Summary */}
-        {branchAnalytics.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="mt-8 bg-white/10 backdrop-blur-sm rounded-2xl p-6"
+        {/* Quick Actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        >
+          <button
+            onClick={() => router.push('/crm/leads')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-2xl p-6 transition-all group"
           >
-            <h3 className="text-xl font-bold text-white mb-4">📊 Overall Performance Summary</h3>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-1">{overallStats.totalLeads}</div>
-                <div className="text-sm text-white/70">Total Leads</div>
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
+                <UserGroupIcon className="w-6 h-6 text-blue-400" />
               </div>
-              
-              <div className="text-center">
-                <div className="text-3xl font-bold text-purple-400 mb-1">{overallStats.conversionRate.toFixed(1)}%</div>
-                <div className="text-sm text-white/70">Conversion Rate</div>
+              <div className="text-left">
+                <h3 className="font-semibold text-white">Leads Beheren</h3>
+                <p className="text-sm text-white/70">Bekijk en beheer al je leads</p>
               </div>
-              
-              <div className="text-center">
-                <div className="text-3xl font-bold text-green-400 mb-1">€{Math.round(overallStats.totalRevenue / 1000)}K</div>
-                <div className="text-sm text-white/70">Total Revenue</div>
-              </div>
-              
-              <div className="text-center">
-                <div className="text-3xl font-bold text-blue-400 mb-1">€{Math.round(overallStats.avgLeadValue)}</div>
-                <div className="text-sm text-white/70">Average Lead Value</div>
-              </div>
+              <ArrowRightIcon className="w-5 h-5 text-white/50 ml-auto" />
             </div>
-          </motion.div>
-        )}
+          </button>
 
+          <button
+            onClick={() => router.push('/crm/analytics')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-2xl p-6 transition-all group"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
+                <ChartBarIcon className="w-6 h-6 text-purple-400" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-white">Analytics</h3>
+                <p className="text-sm text-white/70">Diepgaande inzichten en rapporten</p>
+              </div>
+              <ArrowRightIcon className="w-5 h-5 text-white/50 ml-auto" />
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push('/crm/settings')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-2xl p-6 transition-all group"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
+                <CogIcon className="w-6 h-6 text-orange-400" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-white">Instellingen</h3>
+                <p className="text-sm text-white/70">Configureer je CRM voorkeuren</p>
+              </div>
+              <ArrowRightIcon className="w-5 h-5 text-white/50 ml-auto" />
+            </div>
+          </button>
+        </motion.div>
       </div>
     </div>
   );

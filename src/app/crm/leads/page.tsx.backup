@@ -46,7 +46,6 @@ export default function CustomerLeadsPage() {
   const [branchAnalytics, setBranchAnalytics] = useState<BranchAnalytics[]>([]);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list');
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -203,52 +202,6 @@ export default function CustomerLeadsPage() {
     }
   };
 
-  // Load user preferences
-  const loadUserPreferences = async () => {
-    if (!customerData?.id) return;
-    
-    try {
-      const response = await fetch(`/api/user-preferences?customerId=${customerData.id}`);
-      if (response.ok) {
-        const { preferences } = await response.json();
-        setViewMode(preferences.viewMode || 'list');
-        console.log('✅ User preferences loaded:', preferences);
-      }
-    } catch (error) {
-      console.error('❌ Error loading user preferences:', error);
-    } finally {
-      setPreferencesLoaded(true);
-    }
-  };
-
-  // Save user preferences
-  const saveUserPreferences = async (newViewMode: 'list' | 'pipeline') => {
-    if (!customerData?.id) return;
-    
-    try {
-      const preferences = {
-        viewMode: newViewMode,
-        theme: 'dark',
-        notifications: true
-      };
-      
-      const response = await fetch('/api/user-preferences', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customerData.id,
-          preferences
-        })
-      });
-      
-      if (response.ok) {
-        console.log('✅ User preferences saved:', preferences);
-      }
-    } catch (error) {
-      console.error('❌ Error saving user preferences:', error);
-    }
-  };
-
   // Load data on mount
   useEffect(() => {
     if (user?.email && isAuthenticated) {
@@ -256,13 +209,29 @@ export default function CustomerLeadsPage() {
     }
   }, [user?.email, isAuthenticated]);
 
-  // Load preferences when customer data is available
-  useEffect(() => {
-    if (customerData?.id && !preferencesLoaded) {
-      loadUserPreferences();
-    }
-  }, [customerData?.id, preferencesLoaded]);
+          } catch (error) {
+            console.error('Error fetching Google Sheets URL from blob:', error);
+            // Fallback to localStorage data
+            setCustomerData(customer);
+            setLeads(customer.leadData || []);
+            
+            // 🧠 Generate branch analytics for fallback data
+            if (customer.leadData && customer.leadData.length > 0) {
+              const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
+              setBranchAnalytics(analytics);
+              console.log('📊 Branch analytics generated (fallback):', analytics);
+            } else {
+              setBranchAnalytics([]);
+            }
+          }
+        }
+        
+        setIsLoading(false);
+      }
+    };
 
+    loadCustomerData();
+  }, [user]);
 
   // Auto smart sync when customer data is loaded - simplified approach
   useEffect(() => {
@@ -712,10 +681,7 @@ export default function CustomerLeadsPage() {
               {/* View Mode Switcher */}
               <div className="flex bg-white/10 rounded-lg p-1">
                 <button
-                  onClick={() => {
-                    setViewMode('pipeline');
-                    saveUserPreferences('pipeline');
-                  }}
+                  onClick={() => setViewMode('pipeline')}
                   className={`px-3 py-2 text-sm rounded-md transition-colors ${
                     viewMode === 'pipeline'
                       ? 'bg-white/20 text-white' 
@@ -725,10 +691,7 @@ export default function CustomerLeadsPage() {
                   Pipeline
                 </button>
                 <button
-                  onClick={() => {
-                    setViewMode('list');
-                    saveUserPreferences('list');
-                  }}
+                  onClick={() => setViewMode('list')}
                   className={`px-3 py-2 text-sm rounded-md transition-colors ${
                     viewMode === 'list'
                       ? 'bg-white/20 text-white' 
