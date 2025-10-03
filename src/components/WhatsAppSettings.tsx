@@ -47,48 +47,36 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
       setIsLoading(true);
       console.log(`🔄 Loading WhatsApp config for customer: ${customerId}`);
       
+      if (!customerId) {
+        console.error('❌ No customerId provided!');
+        throw new Error('No customerId provided');
+      }
+      
       const response = await fetch(`/api/whatsapp/config?customerId=${customerId}`);
       console.log(`📡 WhatsApp config response status: ${response.status}`);
+      console.log(`📡 WhatsApp config response headers:`, response.headers);
       
       if (response.ok) {
-        const { config } = await response.json();
-        console.log(`✅ WhatsApp config loaded:`, config);
-        setConfig(config);
+        const data = await response.json();
+        console.log(`✅ WhatsApp config response data:`, data);
+        
+        if (data.config) {
+          console.log(`✅ WhatsApp config loaded:`, data.config);
+          setConfig(data.config);
+        } else {
+          console.error('❌ No config in response:', data);
+          throw new Error('No config in response');
+        }
       } else {
         console.error(`❌ WhatsApp config failed: ${response.status}`);
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
         console.error('Error details:', error);
-        // Set default config on error
-        setConfig({
-          customerId,
-          enabled: false,
-          useOwnNumber: false,
-          businessName: '',
-          warmeleadsNumber: '+31 6 12345678',
-          templates: DEFAULT_TEMPLATES,
-          timing: {
-            newLead: 'immediate',
-            followUp: 24,
-            reminder: 72
-          },
-          usage: {
-            messagesSent: 0,
-            messagesDelivered: 0,
-            messagesRead: 0,
-            messagesFailed: 0,
-            lastReset: new Date().toISOString()
-          },
-          billing: {
-            plan: 'basic',
-            messagesLimit: 50,
-            setupPaid: false
-          }
-        });
+        throw new Error(`API error: ${response.status}`);
       }
     } catch (error) {
       console.error('❌ Error loading WhatsApp config:', error);
       // Set default config on error
-      setConfig({
+      const defaultConfig = {
         customerId,
         enabled: false,
         useOwnNumber: false,
@@ -96,7 +84,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
         warmeleadsNumber: '+31 6 12345678',
         templates: DEFAULT_TEMPLATES,
         timing: {
-          newLead: 'immediate',
+          newLead: 'immediate' as const,
           followUp: 24,
           reminder: 72
         },
@@ -108,12 +96,15 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
           lastReset: new Date().toISOString()
         },
         billing: {
-          plan: 'basic',
+          plan: 'basic' as const,
           messagesLimit: 50,
           setupPaid: false
         }
-      });
+      };
+      console.log('🔄 Setting default config:', defaultConfig);
+      setConfig(defaultConfig);
     } finally {
+      console.log('🔄 Setting isLoading to false');
       setIsLoading(false);
     }
   };

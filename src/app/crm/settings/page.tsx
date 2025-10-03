@@ -509,9 +509,9 @@ export default function CRMSettingsPage() {
       </div>
 
       {/* WhatsApp Settings Modal */}
-      {customerData && (
+      {showWhatsAppSettings && (
         <WhatsAppSettings
-          customerId={customerData.id}
+          customerId={customerData?.id || user?.email || 'unknown'}
           isOpen={showWhatsAppSettings}
           onClose={() => setShowWhatsAppSettings(false)}
         />
