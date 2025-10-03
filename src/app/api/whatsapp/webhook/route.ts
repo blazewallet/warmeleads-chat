@@ -18,11 +18,11 @@ export async function POST(request: NextRequest) {
     console.log('📨 Twilio WhatsApp webhook received:', JSON.stringify(body, null, 2));
 
     // Handle Twilio webhook events
-    const messageSid = body.MessageSid;
-    const messageStatus = body.MessageStatus;
-    const from = body.From;
-    const to = body.To;
-    const bodyText = body.Body;
+    const messageSid = body.MessageSid as string;
+    const messageStatus = body.MessageStatus as string;
+    const from = body.From as string;
+    const to = body.To as string;
+    const bodyText = body.Body as string;
 
     if (messageSid && messageStatus) {
       // Handle message status update
