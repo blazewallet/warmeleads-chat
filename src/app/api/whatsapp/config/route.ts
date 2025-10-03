@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
       if (verifyResponse.ok) {
         const savedConfig = await verifyResponse.json();
         console.log(`🔍 Verification: Config saved correctly with enabled: ${savedConfig.enabled}`);
+        console.log(`🔍 Verification: Full saved config:`, JSON.stringify(savedConfig, null, 2));
       } else {
         console.error(`❌ Verification failed: Could not read back saved config`);
       }
