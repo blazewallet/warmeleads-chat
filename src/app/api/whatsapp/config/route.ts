@@ -119,10 +119,15 @@ export async function POST(request: NextRequest) {
       useOwnNumber: configToSave.useOwnNumber 
     });
     
-    await put(blobName, JSON.stringify(configToSave), { 
+    console.log(`💾 Attempting to save blob: ${blobName}`);
+    console.log(`💾 Config to save:`, JSON.stringify(configToSave, null, 2));
+    
+    const blobResult = await put(blobName, JSON.stringify(configToSave), { 
       access: 'public',
       allowOverwrite: true // Allow overwriting existing blobs
     });
+    
+    console.log(`💾 Blob save result:`, blobResult);
     
     console.log(`✅ WhatsApp config saved for customer ${customerId}`);
     
