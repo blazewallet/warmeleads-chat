@@ -128,6 +128,10 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
       if (response.ok) {
         const result = await response.json();
         console.log('✅ Config saved successfully:', result);
+        console.log('✅ Saved config details:', { 
+          enabled: result.config?.enabled, 
+          businessName: result.config?.businessName 
+        });
         alert('✅ WhatsApp configuratie opgeslagen!');
         // Don't reload config, just update local state
         console.log('✅ Config saved successfully, keeping local state');

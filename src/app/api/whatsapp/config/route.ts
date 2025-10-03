@@ -115,9 +115,23 @@ export async function POST(request: NextRequest) {
     
     console.log(`✅ WhatsApp config saved for customer ${customerId}`);
     
+    // Verify the config was saved correctly by reading it back
+    try {
+      const verifyResponse = await fetch(`https://blob.vercel-storage.com/${blobName}`);
+      if (verifyResponse.ok) {
+        const savedConfig = await verifyResponse.json();
+        console.log(`🔍 Verification: Config saved correctly with enabled: ${savedConfig.enabled}`);
+      } else {
+        console.error(`❌ Verification failed: Could not read back saved config`);
+      }
+    } catch (verifyError) {
+      console.error(`❌ Verification error:`, verifyError);
+    }
+    
     return NextResponse.json({ 
       success: true, 
-      message: 'WhatsApp configuration saved successfully' 
+      message: 'WhatsApp configuration saved successfully',
+      config: configToSave // Return the saved config for verification
     });
   } catch (error) {
     console.error('❌ CRITICAL ERROR in POST /api/whatsapp/config:', error);
