@@ -231,7 +231,7 @@ export default function CRMDashboard() {
                     </div>
                     <div className="flex justify-between">
                       <span>Omzet:</span>
-                      <span className="text-white">€{Math.round(analytics.totalRevenue)}</span>
+                      <span className="text-white">€{Math.round(analytics.revenue)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Gem. waarde:</span>
