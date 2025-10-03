@@ -122,17 +122,24 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
         body: JSON.stringify({ customerId, config })
       });
 
+      console.log('📡 Save response status:', response.status);
+      console.log('📡 Save response ok:', response.ok);
+      
       if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Config saved successfully:', result);
         alert('✅ WhatsApp configuratie opgeslagen!');
         // Don't reload config, just update local state
         console.log('✅ Config saved successfully, keeping local state');
       } else if (response.status === 402) {
         // Payment required for own number setup
+        console.log('💳 Payment required for own number setup');
         setShowSetupModal(true);
       } else {
-        const error = await response.json();
-        console.error('❌ WhatsApp config save error:', error);
-        alert(`❌ Fout: ${error.error}`);
+        console.error('❌ WhatsApp config save failed with status:', response.status);
+        const error = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        console.error('❌ WhatsApp config save error details:', error);
+        alert(`❌ Fout bij opslaan: ${error.error || 'Server error ' + response.status}`);
       }
     } catch (error) {
       console.error('Error saving WhatsApp config:', error);
@@ -152,13 +159,27 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
       // Get fresh config from server to ensure we have the latest enabled status
       console.log('📤 Getting fresh config from server...');
       const configResponse = await fetch(`/api/whatsapp/config?customerId=${customerId}`);
+      console.log('📡 Config response status:', configResponse.status);
+      console.log('📡 Config response ok:', configResponse.ok);
+      
       if (!configResponse.ok) {
+        console.error('❌ Failed to get fresh config, status:', configResponse.status);
         alert('❌ Kon WhatsApp configuratie niet ophalen');
         return;
       }
-      const { config: freshConfig } = await configResponse.json();
+      
+      const configData = await configResponse.json();
+      console.log('📡 Config response data:', configData);
+      const { config: freshConfig } = configData;
+      
+      console.log('📡 Fresh config details:', { 
+        enabled: freshConfig?.enabled, 
+        businessName: freshConfig?.businessName,
+        useOwnNumber: freshConfig?.useOwnNumber 
+      });
       
       if (!freshConfig || !freshConfig.enabled) {
+        console.error('❌ WhatsApp not enabled in fresh config:', freshConfig);
         alert('❌ WhatsApp is niet ingeschakeld. Schakel eerst WhatsApp in en sla op.');
         return;
       }

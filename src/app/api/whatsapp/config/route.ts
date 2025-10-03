@@ -120,8 +120,18 @@ export async function POST(request: NextRequest) {
       message: 'WhatsApp configuration saved successfully' 
     });
   } catch (error) {
-    console.error('Error in POST /api/whatsapp/config:', error);
-    return NextResponse.json({ error: 'Failed to save config' }, { status: 500 });
+    console.error('❌ CRITICAL ERROR in POST /api/whatsapp/config:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      customerId: customerId,
+      config: config
+    });
+    return NextResponse.json({ 
+      error: 'Failed to save config',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
   }
 }
 
