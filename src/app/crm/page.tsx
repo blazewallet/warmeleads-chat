@@ -90,8 +90,8 @@ export default function CRMDashboard() {
           status: 'customer',
           googleSheetUrl: '',
           leadData: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
           emailNotifications: {
             newLeads: true,
             weeklyReports: false
