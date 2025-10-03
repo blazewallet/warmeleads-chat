@@ -123,9 +123,7 @@ export async function POST(request: NextRequest) {
     console.error('❌ CRITICAL ERROR in POST /api/whatsapp/config:', error);
     console.error('❌ Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : 'No stack trace',
-      customerId: customerId,
-      config: config
+      stack: error instanceof Error ? error.stack : 'No stack trace'
     });
     return NextResponse.json({ 
       error: 'Failed to save config',
