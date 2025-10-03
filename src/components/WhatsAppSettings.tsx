@@ -81,7 +81,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
         enabled: false,
         useOwnNumber: false,
         businessName: '',
-          warmeleadsNumber: '+31850477066',
+          warmeleadsNumber: '+31850477067',
         templates: DEFAULT_TEMPLATES,
         timing: {
           newLead: 'immediate' as const,

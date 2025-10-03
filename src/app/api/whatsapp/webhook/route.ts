@@ -1,7 +1,7 @@
 /**
- * WHATSAPP WEBHOOK API
+ * TWILIO WHATSAPP WEBHOOK API
  * 
- * Handles webhook events from WhatsApp Business API
+ * Handles webhook events from Twilio WhatsApp Business API
  * - Message status updates (sent, delivered, read, failed)
  * - Incoming messages
  */
@@ -11,103 +11,82 @@ import { whatsappService } from '@/lib/whatsappAPI';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    // Twilio sends form data, not JSON
+    const formData = await request.formData();
+    const body = Object.fromEntries(formData.entries());
     
-    console.log('📨 WhatsApp webhook received:', JSON.stringify(body, null, 2));
+    console.log('📨 Twilio WhatsApp webhook received:', JSON.stringify(body, null, 2));
 
-    // Handle different webhook events
-    if (body.entry) {
-      for (const entry of body.entry) {
-        if (entry.changes) {
-          for (const change of entry.changes) {
-            if (change.field === 'messages') {
-              await handleMessageEvents(change.value);
-            }
-          }
-        }
-      }
+    // Handle Twilio webhook events
+    const messageSid = body.MessageSid;
+    const messageStatus = body.MessageStatus;
+    const from = body.From;
+    const to = body.To;
+    const bodyText = body.Body;
+
+    if (messageSid && messageStatus) {
+      // Handle message status update
+      await handleTwilioStatusUpdate(messageSid, messageStatus);
+    }
+
+    if (from && to && bodyText) {
+      // Handle incoming message
+      await handleTwilioIncomingMessage(messageSid, from, to, bodyText);
     }
 
     return NextResponse.json({ status: 'ok' });
   } catch (error) {
-    console.error('Error in WhatsApp webhook:', error);
+    console.error('Error in Twilio WhatsApp webhook:', error);
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
 
-// Handle message events
-async function handleMessageEvents(value: any) {
+// Handle Twilio status updates
+async function handleTwilioStatusUpdate(messageSid: string, messageStatus: string) {
   try {
-    // Handle status updates
-    if (value.statuses) {
-      for (const status of value.statuses) {
-        await handleStatusUpdate(status);
-      }
-    }
-
-    // Handle incoming messages
-    if (value.messages) {
-      for (const message of value.messages) {
-        await handleIncomingMessage(message);
-      }
-    }
-  } catch (error) {
-    console.error('Error handling message events:', error);
-  }
-}
-
-// Handle status updates
-async function handleStatusUpdate(status: any) {
-  try {
-    const { id, status: messageStatus, timestamp } = status;
+    console.log(`📊 Twilio message status update: ${messageSid} -> ${messageStatus}`);
     
-    console.log(`📊 Message status update: ${id} -> ${messageStatus}`);
+    // Map Twilio status to our status format
+    let mappedStatus = messageStatus;
+    if (messageStatus === 'sent') mappedStatus = 'sent';
+    else if (messageStatus === 'delivered') mappedStatus = 'delivered';
+    else if (messageStatus === 'read') mappedStatus = 'read';
+    else if (messageStatus === 'failed') mappedStatus = 'failed';
     
     // Update message status in our system
-    await whatsappService.updateMessageStatus(id, messageStatus);
+    await whatsappService.updateMessageStatus(messageSid, mappedStatus);
     
-    // Log status update
-    console.log(`✅ Message ${id} status updated to ${messageStatus}`);
+    console.log(`✅ Twilio message ${messageSid} status updated to ${mappedStatus}`);
   } catch (error) {
-    console.error('Error handling status update:', error);
+    console.error('Error handling Twilio status update:', error);
   }
 }
 
-// Handle incoming messages
-async function handleIncomingMessage(message: any) {
+// Handle Twilio incoming messages
+async function handleTwilioIncomingMessage(messageSid: string, from: string, to: string, bodyText: string) {
   try {
-    const { id, from, timestamp, type, text } = message;
-    
-    console.log(`📨 Incoming message from ${from}: ${text?.body || 'non-text message'}`);
+    console.log(`📨 Twilio incoming message from ${from}: ${bodyText}`);
     
     // Store incoming message
     // This could trigger auto-responses or notifications
     
-    // For now, just log it
-    console.log(`✅ Incoming message ${id} processed`);
+    console.log(`✅ Twilio incoming message ${messageSid} processed`);
   } catch (error) {
-    console.error('Error handling incoming message:', error);
+    console.error('Error handling Twilio incoming message:', error);
   }
 }
 
-// GET: Webhook verification (for Meta)
+// GET: Health check for Twilio webhook
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const mode = searchParams.get('hub.mode');
-    const token = searchParams.get('hub.verify_token');
-    const challenge = searchParams.get('hub.challenge');
-
-    // Verify webhook
-    if (mode === 'subscribe' && token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
-      console.log('✅ WhatsApp webhook verified');
-      return new NextResponse(challenge);
-    } else {
-      console.log('❌ WhatsApp webhook verification failed');
-      return NextResponse.json({ error: 'Verification failed' }, { status: 403 });
-    }
+    console.log('✅ Twilio WhatsApp webhook health check');
+    return NextResponse.json({ 
+      status: 'ok', 
+      service: 'Twilio WhatsApp Webhook',
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    console.error('Error in WhatsApp webhook verification:', error);
-    return NextResponse.json({ error: 'Verification error' }, { status: 500 });
+    console.error('Error in Twilio WhatsApp webhook health check:', error);
+    return NextResponse.json({ error: 'Health check failed' }, { status: 500 });
   }
 }
