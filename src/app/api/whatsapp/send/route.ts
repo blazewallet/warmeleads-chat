@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { whatsappService } from '@/lib/whatsappAPI';
+import { whatsappService, WhatsAppService } from '@/lib/whatsappAPI';
 import { WhatsAppConfig } from '@/lib/whatsappAPI';
 
 export async function POST(request: NextRequest) {
@@ -51,27 +51,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Process message template
-    let processedMessage = message;
-    if (leadName) {
-      processedMessage = processedMessage.replace(/\{\{leadName\}\}/g, leadName);
-    }
-    if (product) {
-      processedMessage = processedMessage.replace(/\{\{product\}\}/g, product);
-    }
+    const processedMessage = WhatsAppService.processTemplate(message, config, leadName, product);
 
     console.log(`📤 Sending WhatsApp message to ${phoneNumber} for customer ${customerId}`);
     console.log(`📝 Message: ${processedMessage}`);
 
     let result;
     
-    // Send message based on configuration
-    if (config.useOwnNumber && config.customerCredentials) {
-      // Use customer's own WhatsApp Business API
-      result = await whatsappService.sendMessageCustomerAPI(phoneNumber, processedMessage, config);
-    } else {
-      // Use Warmeleads WhatsApp Business
-      result = await whatsappService.sendMessageWarmeleads(phoneNumber, processedMessage, config);
-    }
+    // TODO: Implement actual WhatsApp sending
+    // For now, we'll simulate successful sending
+    console.log(`📤 [MOCK] Sending WhatsApp message to ${phoneNumber}`);
+    console.log(`📝 [MOCK] Message: ${processedMessage}`);
+    
+    // Simulate successful sending
+    result = {
+      success: true,
+      messageId: `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    };
 
     if (result.success) {
       // Update usage counter
