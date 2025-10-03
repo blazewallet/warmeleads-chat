@@ -164,7 +164,7 @@ export default function CustomerLeadsPage() {
     return () => clearTimeout(timer);
   }, [router, authLoading, isAuthenticated, user]);
 
-  // Load customer data
+  // Load customer data with Google Sheets sync
   const loadCustomerData = async () => {
     setIsLoading(true);
     
@@ -184,6 +184,36 @@ export default function CustomerLeadsPage() {
 
       if (!customer) {
         throw new Error('Customer not found.');
+      }
+
+      // 🔄 CRITICAL: Always sync with Google Sheets for fresh data
+      if (customer.googleSheetUrl) {
+        console.log('🔄 Leads Portal: Syncing with Google Sheets for fresh data...');
+        try {
+          const freshLeads = await readCustomerLeads(customer.googleSheetUrl);
+          
+          // Update customer with fresh leads
+          customer.leadData = freshLeads;
+          console.log(`✅ Leads Portal: Synced ${freshLeads.length} fresh leads from Google Sheets`);
+          
+          // Update blob storage with fresh data
+          try {
+            await fetch('/api/customer-data', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customerId: customer.id,
+                customerData: customer
+              })
+            });
+            console.log('✅ Leads Portal: Updated blob storage with fresh data');
+          } catch (blobError) {
+            console.error('❌ Leads Portal: Failed to update blob storage:', blobError);
+          }
+        } catch (syncError) {
+          console.error('❌ Leads Portal: Google Sheets sync failed:', syncError);
+          // Continue with existing data if sync fails
+        }
       }
 
       setCustomerData(customer);

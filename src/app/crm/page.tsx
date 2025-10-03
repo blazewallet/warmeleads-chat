@@ -38,7 +38,7 @@ export default function CRMDashboard() {
     loadCRMData();
   }, [isAuthenticated, user, authLoading, router]);
 
-  // Load CRM data
+  // Load CRM data with Google Sheets sync
   const loadCRMData = async () => {
     setIsLoading(true);
     
@@ -58,6 +58,37 @@ export default function CRMDashboard() {
 
       if (!customer) {
         throw new Error('Customer not found.');
+      }
+
+      // 🔄 CRITICAL: Always sync with Google Sheets for fresh data
+      if (customer.googleSheetUrl) {
+        console.log('🔄 CRM Dashboard: Syncing with Google Sheets for fresh data...');
+        try {
+          const { readCustomerLeads } = await import('@/lib/googleSheetsAPI');
+          const freshLeads = await readCustomerLeads(customer.googleSheetUrl);
+          
+          // Update customer with fresh leads
+          customer.leadData = freshLeads;
+          console.log(`✅ CRM Dashboard: Synced ${freshLeads.length} fresh leads from Google Sheets`);
+          
+          // Update blob storage with fresh data
+          try {
+            await fetch('/api/customer-data', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customerId: customer.id,
+                customerData: customer
+              })
+            });
+            console.log('✅ CRM Dashboard: Updated blob storage with fresh data');
+          } catch (blobError) {
+            console.error('❌ CRM Dashboard: Failed to update blob storage:', blobError);
+          }
+        } catch (syncError) {
+          console.error('❌ CRM Dashboard: Google Sheets sync failed:', syncError);
+          // Continue with existing data if sync fails
+        }
       }
 
       setCustomerData(customer);
