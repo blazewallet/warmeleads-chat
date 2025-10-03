@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         message: 'WhatsApp message sent successfully'
       });
     } else {
-      console.error(`❌ Failed to send WhatsApp message: ${result.error}`);
+      console.error(`❌ Failed to send WhatsApp message`);
       
       // Update failed counter
       config.usage.messagesFailed++;
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: false,
-        error: result.error || 'Failed to send message'
+        error: 'Failed to send message'
       }, { status: 500 });
     }
   } catch (error) {
