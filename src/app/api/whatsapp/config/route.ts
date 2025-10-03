@@ -99,7 +99,10 @@ export async function POST(request: NextRequest) {
       ...config,
       customerId,
       lastUpdated: new Date().toISOString()
-    }), { access: 'public' });
+    }), { 
+      access: 'public',
+      allowOverwrite: true // Allow overwriting existing blobs
+    });
     
     console.log(`✅ WhatsApp config saved for customer ${customerId}`);
     
