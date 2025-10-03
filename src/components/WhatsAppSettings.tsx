@@ -122,11 +122,14 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
 
       if (response.ok) {
         alert('✅ WhatsApp configuratie opgeslagen!');
+        // Reload config to ensure it's up to date
+        await loadConfig();
       } else if (response.status === 402) {
         // Payment required for own number setup
         setShowSetupModal(true);
       } else {
         const error = await response.json();
+        console.error('❌ WhatsApp config save error:', error);
         alert(`❌ Fout: ${error.error}`);
       }
     } catch (error) {
@@ -143,7 +146,14 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
       return;
     }
 
+    if (!config || !config.enabled) {
+      alert('❌ WhatsApp is niet ingeschakeld. Schakel eerst WhatsApp in en sla op.');
+      return;
+    }
+
     try {
+      console.log('📤 Sending test message:', { customerId, testPhone, testMessage, config });
+      
       const response = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -162,6 +172,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
         setTestPhone('');
       } else {
         const error = await response.json();
+        console.error('❌ Test message error:', error);
         alert(`❌ Fout: ${error.error}`);
       }
     } catch (error) {
