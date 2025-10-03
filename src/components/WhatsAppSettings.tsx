@@ -299,7 +299,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                         placeholder="Bericht template voor nieuwe leads..."
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        Gebruik {{leadName}}, {{product}}, {{businessName}} voor variabelen
+                        Gebruik {`{{leadName}}`}, {`{{product}}`}, {`{{businessName}}`} voor variabelen
                       </p>
                     </div>
                   </div>
