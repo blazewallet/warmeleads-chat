@@ -122,12 +122,25 @@ export async function POST(request: NextRequest) {
     console.log(`💾 Attempting to save blob: ${blobName}`);
     console.log(`💾 Config to save:`, JSON.stringify(configToSave, null, 2));
     
-    const blobResult = await put(blobName, JSON.stringify(configToSave), { 
-      access: 'public',
-      allowOverwrite: true // Allow overwriting existing blobs
-    });
-    
-    console.log(`💾 Blob save result:`, blobResult);
+    try {
+      // Delete existing blob first to ensure clean save
+      try {
+        await del(blobName);
+        console.log(`🗑️ Deleted existing blob for customer ${customerId}`);
+      } catch (deleteError) {
+        console.log(`ℹ️ No existing blob to delete for customer ${customerId}`);
+      }
+      
+      const blobResult = await put(blobName, JSON.stringify(configToSave), { 
+        access: 'public',
+        addRandomSuffix: false // Don't add random suffix
+      });
+      
+      console.log(`💾 Blob save result:`, blobResult);
+    } catch (blobError) {
+      console.error(`❌ Blob save failed:`, blobError);
+      throw blobError;
+    }
     
     console.log(`✅ WhatsApp config saved for customer ${customerId}`);
     
