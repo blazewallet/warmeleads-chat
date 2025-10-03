@@ -219,8 +219,8 @@ export default function CustomerLeadsPage() {
           createdAt: new Date(),
           updatedAt: new Date(),
           emailNotifications: {
-            newLeads: true,
-            weeklyReports: false
+            enabled: true,
+            newLeads: true
           }
         };
       }
