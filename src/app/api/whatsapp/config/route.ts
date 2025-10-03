@@ -7,8 +7,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { put, del } from '@vercel/blob';
 import { WhatsAppConfig, DEFAULT_TEMPLATES } from '@/lib/whatsappAPI';
+
+// Simple in-memory storage for testing (will be replaced with proper storage later)
+const configStorage = new Map<string, WhatsAppConfig>();
 
 // GET: Haal WhatsApp configuratie op
 export async function GET(request: NextRequest) {
@@ -20,51 +22,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     }
 
-    const blobName = `whatsapp-config/${customerId}.json`;
-    
-    try {
-      const response = await fetch(`https://blob.vercel-storage.com/${blobName}`);
-      if (response.ok) {
-        const config = await response.json();
-        // FORCE enabled to be boolean when loading
-        config.enabled = Boolean(config.enabled);
-        console.log(`✅ WhatsApp config loaded for customer ${customerId}:`, { enabled: config.enabled, businessName: config.businessName });
-        return NextResponse.json({ config });
-      } else {
-        console.log(`ℹ️ No WhatsApp config found for customer ${customerId}, returning default`);
-        // Return default config if none exists
-        const defaultConfig: WhatsAppConfig = {
-          customerId,
-          enabled: false,
-          useOwnNumber: false,
-          businessName: '',
-          warmeleadsNumber: '+31850477067', // Warmeleads business number
-          templates: DEFAULT_TEMPLATES,
-          timing: {
-            newLead: 'immediate',
-            followUp: 24,
-            reminder: 72
-          },
-          usage: {
-            messagesSent: 0,
-            messagesDelivered: 0,
-            messagesRead: 0,
-            messagesFailed: 0,
-            lastReset: new Date().toISOString()
-          },
-          billing: {
-            plan: 'basic',
-            messagesLimit: 50,
-            setupPaid: false
-          }
-        };
-        
-        return NextResponse.json({ config: defaultConfig });
-      }
-    } catch (error) {
-      console.error('Error fetching WhatsApp config:', error);
-      return NextResponse.json({ error: 'Failed to fetch config' }, { status: 500 });
+    // Check in-memory storage first
+    const storedConfig = configStorage.get(customerId);
+    if (storedConfig) {
+      console.log(`✅ WhatsApp config loaded from memory for customer ${customerId}:`, { enabled: storedConfig.enabled, businessName: storedConfig.businessName });
+      return NextResponse.json({ config: storedConfig });
     }
+
+    // Return default config if none exists
+    console.log(`ℹ️ No WhatsApp config found for customer ${customerId}, returning default`);
+    const defaultConfig: WhatsAppConfig = {
+      customerId,
+      enabled: false,
+      useOwnNumber: false,
+      businessName: '',
+      warmeleadsNumber: '+31850477067', // Warmeleads business number
+      templates: DEFAULT_TEMPLATES,
+      timing: {
+        newLead: 'immediate',
+        followUp: 24,
+        reminder: 72
+      },
+      usage: {
+        messagesSent: 0,
+        messagesDelivered: 0,
+        messagesRead: 0,
+        messagesFailed: 0,
+        lastReset: new Date().toISOString()
+      },
+      billing: {
+        plan: 'basic',
+        messagesLimit: 50,
+        setupPaid: false
+      }
+    };
+    
+    return NextResponse.json({ config: defaultConfig });
   } catch (error) {
     console.error('Error in GET /api/whatsapp/config:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -103,9 +96,7 @@ export async function POST(request: NextRequest) {
       }, { status: 402 }); // Payment Required
     }
 
-    const blobName = `whatsapp-config/${customerId}.json`;
-    
-    // Save config to blob storage - FORCE enabled to be boolean
+    // Save config to in-memory storage - FORCE enabled to be boolean
     const configToSave = {
       ...config,
       enabled: Boolean(config.enabled), // FORCE boolean conversion
@@ -113,56 +104,24 @@ export async function POST(request: NextRequest) {
       lastUpdated: new Date().toISOString()
     };
     
-    console.log(`💾 Saving WhatsApp config for customer ${customerId}:`, { 
+    console.log(`💾 Saving WhatsApp config to memory for customer ${customerId}:`, { 
       enabled: configToSave.enabled, 
       businessName: configToSave.businessName,
       useOwnNumber: configToSave.useOwnNumber 
     });
     
-    console.log(`💾 Attempting to save blob: ${blobName}`);
-    console.log(`💾 Config to save:`, JSON.stringify(configToSave, null, 2));
+    // Store in memory
+    configStorage.set(customerId, configToSave);
     
-    try {
-      // Delete existing blob first to ensure clean save
-      try {
-        await del(blobName);
-        console.log(`🗑️ Deleted existing blob for customer ${customerId}`);
-      } catch (deleteError) {
-        console.log(`ℹ️ No existing blob to delete for customer ${customerId}`);
-      }
-      
-      const blobResult = await put(blobName, JSON.stringify(configToSave), { 
-        access: 'public',
-        addRandomSuffix: false // Don't add random suffix
-      });
-      
-      console.log(`💾 Blob save result:`, blobResult);
-    } catch (blobError) {
-      console.error(`❌ Blob save failed:`, blobError);
-      throw blobError;
-    }
-    
-    console.log(`✅ WhatsApp config saved for customer ${customerId}`);
+    console.log(`✅ WhatsApp config saved to memory for customer ${customerId}`);
     
     // Verify the config was saved correctly by reading it back
-    try {
-      const verifyResponse = await fetch(`https://blob.vercel-storage.com/${blobName}`);
-      if (verifyResponse.ok) {
-        const savedConfig = await verifyResponse.json();
-        console.log(`🔍 Verification: Config saved correctly with enabled: ${savedConfig.enabled}`);
-        console.log(`🔍 Verification: Full saved config:`, JSON.stringify(savedConfig, null, 2));
-      } else {
-        console.error(`❌ Verification failed: Could not read back saved config - Status: ${verifyResponse.status}`);
-        // Try alternative verification method
-        console.log(`🔍 Trying alternative verification...`);
-        const altResponse = await fetch(`${request.nextUrl.origin}/api/whatsapp/config?customerId=${customerId}`);
-        if (altResponse.ok) {
-          const altConfig = await altResponse.json();
-          console.log(`🔍 Alternative verification:`, altConfig);
-        }
-      }
-    } catch (verifyError) {
-      console.error(`❌ Verification error:`, verifyError);
+    const verifyConfig = configStorage.get(customerId);
+    if (verifyConfig) {
+      console.log(`🔍 Verification: Config saved correctly with enabled: ${verifyConfig.enabled}`);
+      console.log(`🔍 Verification: Full saved config:`, JSON.stringify(verifyConfig, null, 2));
+    } else {
+      console.error(`❌ Verification failed: Could not read back saved config from memory`);
     }
     
     return NextResponse.json({ 
@@ -194,20 +153,14 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     }
 
-    const blobName = `whatsapp-config/${customerId}.json`;
+    // Remove from memory storage
+    configStorage.delete(customerId);
+    console.log(`✅ WhatsApp config deleted from memory for customer ${customerId}`);
     
-    try {
-      await del(blobName);
-      console.log(`✅ WhatsApp config deleted for customer ${customerId}`);
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: 'WhatsApp configuration deleted successfully' 
-      });
-    } catch (error) {
-      console.error('Error deleting WhatsApp config:', error);
-      return NextResponse.json({ error: 'Failed to delete config' }, { status: 500 });
-    }
+    return NextResponse.json({ 
+      success: true, 
+      message: 'WhatsApp configuration deleted successfully' 
+    });
   } catch (error) {
     console.error('Error in DELETE /api/whatsapp/config:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
