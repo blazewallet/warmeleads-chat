@@ -114,6 +114,8 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
 
     try {
       setIsSaving(true);
+      console.log('💾 Saving WhatsApp config:', { customerId, config: { enabled: config.enabled, businessName: config.businessName } });
+      
       const response = await fetch('/api/whatsapp/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

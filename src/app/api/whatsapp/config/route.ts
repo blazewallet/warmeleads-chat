@@ -96,11 +96,19 @@ export async function POST(request: NextRequest) {
     const blobName = `whatsapp-config/${customerId}.json`;
     
     // Save config to blob storage
-    await put(blobName, JSON.stringify({
+    const configToSave = {
       ...config,
       customerId,
       lastUpdated: new Date().toISOString()
-    }), { 
+    };
+    
+    console.log(`💾 Saving WhatsApp config for customer ${customerId}:`, { 
+      enabled: configToSave.enabled, 
+      businessName: configToSave.businessName,
+      useOwnNumber: configToSave.useOwnNumber 
+    });
+    
+    await put(blobName, JSON.stringify(configToSave), { 
       access: 'public',
       allowOverwrite: true // Allow overwriting existing blobs
     });
