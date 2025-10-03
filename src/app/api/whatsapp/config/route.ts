@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
       const response = await fetch(`https://blob.vercel-storage.com/${blobName}`);
       if (response.ok) {
         const config = await response.json();
+        // FORCE enabled to be boolean when loading
+        config.enabled = Boolean(config.enabled);
         console.log(`✅ WhatsApp config loaded for customer ${customerId}:`, { enabled: config.enabled, businessName: config.businessName });
         return NextResponse.json({ config });
       } else {
@@ -84,6 +86,14 @@ export async function POST(request: NextRequest) {
       config.businessName = 'WarmeLeads';
     }
 
+    // FORCE enabled to be boolean and ensure it's properly set
+    if (typeof config.enabled !== 'boolean') {
+      console.log('⚠️ Enabled is not boolean, converting to boolean');
+      config.enabled = Boolean(config.enabled);
+    }
+    
+    console.log('🔧 FORCED enabled status:', config.enabled, 'type:', typeof config.enabled);
+
     // If customer wants to use own number, check if setup is paid
     if (config.useOwnNumber && !config.billing?.setupPaid) {
       return NextResponse.json({ 
@@ -95,9 +105,10 @@ export async function POST(request: NextRequest) {
 
     const blobName = `whatsapp-config/${customerId}.json`;
     
-    // Save config to blob storage
+    // Save config to blob storage - FORCE enabled to be boolean
     const configToSave = {
       ...config,
+      enabled: Boolean(config.enabled), // FORCE boolean conversion
       customerId,
       lastUpdated: new Date().toISOString()
     };
