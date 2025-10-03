@@ -172,9 +172,29 @@ export default function CustomerLeadsPage() {
     try {
       const response = await fetch('/api/customer-data');
       if (response.ok) {
-        const { customers } = await response.json();
-        customer = customers.find((c: any) => c.email === user?.email);
-        console.log('✅ Leads Portal: Customer data fetched from API.');
+        const data = await response.json();
+        console.log('📡 Leads Portal: API response:', data);
+        
+        // Handle different response structures
+        if (data.customers && Array.isArray(data.customers)) {
+          customer = data.customers.find((c: any) => c.email === user?.email);
+        } else if (data.customer) {
+          customer = data.customer;
+        } else if (data.success && data.customer) {
+          customer = data.customer;
+        } else {
+          console.log('ℹ️ Leads Portal: Unexpected API response structure, falling back to localStorage.');
+          const allCustomers = crmSystem.getAllCustomers();
+          customer = allCustomers.find(c => c.email === user?.email) || null;
+        }
+        
+        if (customer) {
+          console.log('✅ Leads Portal: Customer data fetched from API.');
+        } else {
+          console.log('ℹ️ Leads Portal: Customer not found in API response, falling back to localStorage.');
+          const allCustomers = crmSystem.getAllCustomers();
+          customer = allCustomers.find(c => c.email === user?.email) || null;
+        }
       } else {
         console.log('ℹ️ Leads Portal: API fetch failed, falling back to localStorage.');
         // Fallback to localStorage if API fails or no data
@@ -183,7 +203,26 @@ export default function CustomerLeadsPage() {
       }
 
       if (!customer) {
-        throw new Error('Customer not found.');
+        console.log('ℹ️ Leads Portal: Customer not found in any source, creating fallback customer.');
+        // Create a minimal fallback customer to prevent crashes
+        customer = {
+          id: user?.email || 'unknown',
+          name: user?.name || 'Unknown User',
+          email: user?.email || 'unknown@example.com',
+          company: 'Unknown Company',
+          phone: '',
+          address: '',
+          city: '',
+          status: 'customer',
+          googleSheetUrl: '',
+          leadData: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          emailNotifications: {
+            newLeads: true,
+            weeklyReports: false
+          }
+        };
       }
 
       // 🔄 CRITICAL: Always sync with Google Sheets for fresh data

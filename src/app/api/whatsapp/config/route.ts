@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         const config = await response.json();
         return NextResponse.json({ config });
       } else {
+        console.log(`ℹ️ No WhatsApp config found for customer ${customerId}, returning default`);
         // Return default config if none exists
         const defaultConfig: WhatsAppConfig = {
           customerId,
