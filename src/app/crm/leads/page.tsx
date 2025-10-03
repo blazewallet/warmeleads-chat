@@ -2085,6 +2085,33 @@ export default function CustomerLeadsPage() {
                           if (addedLead) {
                             await addLeadToSheet(customerData.googleSheetUrl, addedLead);
                             console.log('✅ Lead added to Google Sheets');
+                            
+                            // 🔄 Trigger WhatsApp message for new lead
+                            try {
+                              const whatsappResponse = await fetch('/api/whatsapp/trigger-new-lead', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  customerId: customerData.id,
+                                  leadId: addedLead.id,
+                                  leadName: addedLead.name,
+                                  phoneNumber: addedLead.phone,
+                                  product: 'onze diensten', // Default product
+                                  branch: 'Custom'
+                                })
+                              });
+                              
+                              if (whatsappResponse.ok) {
+                                const whatsappResult = await whatsappResponse.json();
+                                if (whatsappResult.success) {
+                                  console.log('✅ WhatsApp message triggered for new lead');
+                                }
+                              }
+                            } catch (whatsappError) {
+                              console.error('❌ WhatsApp trigger failed:', whatsappError);
+                              // Don't show error to user, WhatsApp is optional
+                            }
+                            
                             alert('✅ Nieuwe lead succesvol toegevoegd in portal EN Google Sheets!');
                           }
                         } catch (error) {
