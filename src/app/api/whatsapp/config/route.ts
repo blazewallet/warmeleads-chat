@@ -152,7 +152,14 @@ export async function POST(request: NextRequest) {
         console.log(`🔍 Verification: Config saved correctly with enabled: ${savedConfig.enabled}`);
         console.log(`🔍 Verification: Full saved config:`, JSON.stringify(savedConfig, null, 2));
       } else {
-        console.error(`❌ Verification failed: Could not read back saved config`);
+        console.error(`❌ Verification failed: Could not read back saved config - Status: ${verifyResponse.status}`);
+        // Try alternative verification method
+        console.log(`🔍 Trying alternative verification...`);
+        const altResponse = await fetch(`${request.nextUrl.origin}/api/whatsapp/config?customerId=${customerId}`);
+        if (altResponse.ok) {
+          const altConfig = await altResponse.json();
+          console.log(`🔍 Alternative verification:`, altConfig);
+        }
       }
     } catch (verifyError) {
       console.error(`❌ Verification error:`, verifyError);
