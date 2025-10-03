@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
           enabled: false,
           useOwnNumber: false,
           businessName: '',
-          warmeleadsNumber: '+31 6 12345678', // Warmeleads business number
+          warmeleadsNumber: '+31850477066', // Warmeleads business number
           templates: DEFAULT_TEMPLATES,
           timing: {
             newLead: 'immediate',
