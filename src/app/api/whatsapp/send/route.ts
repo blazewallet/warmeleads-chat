@@ -35,8 +35,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { config }: { config: WhatsAppConfig } = await configResponse.json();
+    
+    console.log(`📡 Send API: Config loaded for customer ${customerId}:`, { 
+      enabled: config.enabled, 
+      businessName: config.businessName,
+      type: typeof config.enabled 
+    });
 
     if (!config.enabled) {
+      console.log(`❌ Send API: WhatsApp not enabled for customer ${customerId}`);
       return NextResponse.json({ error: 'WhatsApp is not enabled for this customer' }, { status: 400 });
     }
 
