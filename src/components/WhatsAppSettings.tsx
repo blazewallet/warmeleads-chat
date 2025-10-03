@@ -122,8 +122,8 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
 
       if (response.ok) {
         alert('✅ WhatsApp configuratie opgeslagen!');
-        // Reload config to ensure it's up to date
-        await loadConfig();
+        // Don't reload config, just update local state
+        console.log('✅ Config saved successfully, keeping local state');
       } else if (response.status === 402) {
         // Payment required for own number setup
         setShowSetupModal(true);
@@ -146,13 +146,22 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
       return;
     }
 
-    if (!config || !config.enabled) {
-      alert('❌ WhatsApp is niet ingeschakeld. Schakel eerst WhatsApp in en sla op.');
-      return;
-    }
-
     try {
-      console.log('📤 Sending test message:', { customerId, testPhone, testMessage, config });
+      // Get fresh config from server to ensure we have the latest enabled status
+      console.log('📤 Getting fresh config from server...');
+      const configResponse = await fetch(`/api/whatsapp/config?customerId=${customerId}`);
+      if (!configResponse.ok) {
+        alert('❌ Kon WhatsApp configuratie niet ophalen');
+        return;
+      }
+      const { config: freshConfig } = await configResponse.json();
+      
+      if (!freshConfig || !freshConfig.enabled) {
+        alert('❌ WhatsApp is niet ingeschakeld. Schakel eerst WhatsApp in en sla op.');
+        return;
+      }
+
+      console.log('📤 Sending test message:', { customerId, testPhone, testMessage, freshConfig });
       
       const response = await fetch('/api/whatsapp/send', {
         method: 'POST',

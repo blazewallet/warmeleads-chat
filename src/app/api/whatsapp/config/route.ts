@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
       const response = await fetch(`https://blob.vercel-storage.com/${blobName}`);
       if (response.ok) {
         const config = await response.json();
+        console.log(`✅ WhatsApp config loaded for customer ${customerId}:`, { enabled: config.enabled, businessName: config.businessName });
         return NextResponse.json({ config });
       } else {
         console.log(`ℹ️ No WhatsApp config found for customer ${customerId}, returning default`);
