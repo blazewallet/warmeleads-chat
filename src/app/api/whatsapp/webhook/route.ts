@@ -47,7 +47,7 @@ async function handleTwilioStatusUpdate(messageSid: string, messageStatus: strin
     console.log(`📊 Twilio message status update: ${messageSid} -> ${messageStatus}`);
     
     // Map Twilio status to our status format
-    let mappedStatus = messageStatus;
+    let mappedStatus: 'pending' | 'delivered' | 'sent' | 'read' | 'failed' = 'pending';
     if (messageStatus === 'sent') mappedStatus = 'sent';
     else if (messageStatus === 'delivered') mappedStatus = 'delivered';
     else if (messageStatus === 'read') mappedStatus = 'read';
