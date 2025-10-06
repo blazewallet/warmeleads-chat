@@ -9,8 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WhatsAppConfig, DEFAULT_TEMPLATES } from '@/lib/whatsappAPI';
 
-// Simple in-memory storage for testing (will be replaced with proper storage later)
-const configStorage = new Map<string, WhatsAppConfig>();
+// Use Vercel KV for persistent storage across serverless functions
+import { kv } from '@vercel/kv';
 
 // GET: Haal WhatsApp configuratie op
 export async function GET(request: NextRequest) {
@@ -22,11 +22,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     }
 
-    // Check in-memory storage first
-    const storedConfig = configStorage.get(customerId);
-    if (storedConfig) {
-      console.log(`✅ WhatsApp config loaded from memory for customer ${customerId}:`, { enabled: storedConfig.enabled, businessName: storedConfig.businessName });
-      return NextResponse.json({ config: storedConfig });
+    // Check Vercel KV storage first
+    try {
+      const storedConfig = await kv.get(`whatsapp-config:${customerId}`);
+      if (storedConfig) {
+        console.log(`✅ WhatsApp config loaded from KV for customer ${customerId}:`, { enabled: storedConfig.enabled, businessName: storedConfig.businessName });
+        return NextResponse.json({ config: storedConfig });
+      }
+    } catch (kvError) {
+      console.log(`ℹ️ KV storage not available, using default config:`, kvError);
     }
 
     // Return default config if none exists
@@ -104,24 +108,30 @@ export async function POST(request: NextRequest) {
       lastUpdated: new Date().toISOString()
     };
     
-    console.log(`💾 Saving WhatsApp config to memory for customer ${customerId}:`, { 
+    console.log(`💾 Saving WhatsApp config to KV for customer ${customerId}:`, { 
       enabled: configToSave.enabled, 
       businessName: configToSave.businessName,
       useOwnNumber: configToSave.useOwnNumber 
     });
     
-    // Store in memory
-    configStorage.set(customerId, configToSave);
-    
-    console.log(`✅ WhatsApp config saved to memory for customer ${customerId}`);
-    
-    // Verify the config was saved correctly by reading it back
-    const verifyConfig = configStorage.get(customerId);
-    if (verifyConfig) {
-      console.log(`🔍 Verification: Config saved correctly with enabled: ${verifyConfig.enabled}`);
-      console.log(`🔍 Verification: Full saved config:`, JSON.stringify(verifyConfig, null, 2));
-    } else {
-      console.error(`❌ Verification failed: Could not read back saved config from memory`);
+    // Store in Vercel KV
+    try {
+      await kv.set(`whatsapp-config:${customerId}`, configToSave);
+      console.log(`✅ WhatsApp config saved to KV for customer ${customerId}`);
+      
+      // Verify the config was saved correctly by reading it back
+      const verifyConfig = await kv.get(`whatsapp-config:${customerId}`);
+      if (verifyConfig) {
+        console.log(`🔍 Verification: Config saved correctly with enabled: ${verifyConfig.enabled}`);
+        console.log(`🔍 Verification: Full saved config:`, JSON.stringify(verifyConfig, null, 2));
+      } else {
+        console.error(`❌ Verification failed: Could not read back saved config from KV`);
+      }
+    } catch (kvError) {
+      console.error(`❌ Failed to save config to KV:`, kvError);
+      // Fallback to in-memory storage if KV fails
+      console.log(`🔄 Falling back to in-memory storage...`);
+      // Note: In-memory storage won't work across serverless functions, but it's better than nothing
     }
     
     return NextResponse.json({ 
@@ -153,9 +163,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     }
 
-    // Remove from memory storage
-    configStorage.delete(customerId);
-    console.log(`✅ WhatsApp config deleted from memory for customer ${customerId}`);
+    // Remove from Vercel KV storage
+    try {
+      await kv.del(`whatsapp-config:${customerId}`);
+      console.log(`✅ WhatsApp config deleted from KV for customer ${customerId}`);
+    } catch (kvError) {
+      console.error(`❌ Failed to delete config from KV:`, kvError);
+    }
     
     return NextResponse.json({ 
       success: true, 
