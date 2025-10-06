@@ -97,36 +97,29 @@ export async function POST(request: NextRequest) {
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
     console.log(`🌐 Twilio API URL: ${twilioUrl}`);
     
-    // Prepare request body (QuickPulse style)
-    let requestBody;
+    // EXACT QUICKPULSE IMPLEMENTATION - Always use ContentSid
+    // QuickPulse always uses ContentSid, so we need to create a default one
+    const defaultContentSid = twilioContentSid || 'HX1234567890abcdef1234567890abcdef'; // Default template
     
-    if (twilioContentSid) {
-      // Use template with ContentSid (QuickPulse style)
-      const placeholders = {
-        "1": leadName || "Lead",
-        "2": config.businessName || "WarmeLeads"
-      };
-      
-      requestBody = new URLSearchParams({
-        To: formattedPhone,
-        MessagingServiceSid: twilioMessagingServiceSid,
-        ContentSid: twilioContentSid,
-        ContentVariables: JSON.stringify(placeholders)
-      });
-    } else {
-      // Use direct messaging with MessagingServiceSid (fallback)
-      requestBody = new URLSearchParams({
-        To: formattedPhone,
-        MessagingServiceSid: twilioMessagingServiceSid,
-        Body: processedMessage
-      });
-    }
+    // Prepare placeholders for Twilio template (exact QuickPulse style)
+    const placeholders = {
+      "1": leadName || "Lead",
+      "2": config.businessName || "WarmeLeads"
+    };
     
-    console.log(`📝 Request body (QuickPulse style):`, {
+    // Prepare request body (EXACT QuickPulse style)
+    const requestBody = new URLSearchParams({
       To: formattedPhone,
       MessagingServiceSid: twilioMessagingServiceSid,
-      ContentSid: twilioContentSid || 'NONE (direct messaging)',
-      Body: twilioContentSid ? 'NONE (using template)' : processedMessage.substring(0, 100) + '...'
+      ContentSid: defaultContentSid,
+      ContentVariables: JSON.stringify(placeholders)
+    });
+    
+    console.log(`📝 Request body (EXACT QuickPulse style):`, {
+      To: formattedPhone,
+      MessagingServiceSid: twilioMessagingServiceSid,
+      ContentSid: defaultContentSid,
+      ContentVariables: JSON.stringify(placeholders)
     });
     
     // Send message via Twilio WhatsApp API (QuickPulse style)
