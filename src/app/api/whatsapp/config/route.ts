@@ -36,11 +36,17 @@ export async function GET(request: NextRequest) {
       try {
         const customerDataResponse = await fetch(`${request.nextUrl.origin}/api/customer-data?customerId=${customerId}`);
         if (customerDataResponse.ok) {
-          const customerData = await customerDataResponse.json();
-          if (customerData.whatsappConfig) {
-            console.log(`✅ WhatsApp config loaded from customer data backup for customer ${customerId}:`, { enabled: customerData.whatsappConfig.enabled, businessName: customerData.whatsappConfig.businessName });
-            return NextResponse.json({ config: customerData.whatsappConfig });
+          const customerDataResult = await customerDataResponse.json();
+          console.log(`🔍 Customer data response:`, customerDataResult);
+          
+          if (customerDataResult.success && customerDataResult.customerData?.whatsappConfig) {
+            console.log(`✅ WhatsApp config loaded from customer data backup for customer ${customerId}:`, { enabled: customerDataResult.customerData.whatsappConfig.enabled, businessName: customerDataResult.customerData.whatsappConfig.businessName });
+            return NextResponse.json({ config: customerDataResult.customerData.whatsappConfig });
+          } else {
+            console.log(`ℹ️ No WhatsApp config found in customer data for customer ${customerId}`);
           }
+        } else {
+          console.log(`ℹ️ Customer data API returned ${customerDataResponse.status} for customer ${customerId}`);
         }
       } catch (customerDataError) {
         console.log(`ℹ️ Customer data backup also failed:`, customerDataError);
