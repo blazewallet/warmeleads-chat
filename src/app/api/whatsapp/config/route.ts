@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     // Check Vercel KV storage first
     try {
-      const storedConfig = await kv.get(`whatsapp-config:${customerId}`);
+      const storedConfig = await kv.get(`whatsapp-config:${customerId}`) as WhatsAppConfig | null;
       if (storedConfig) {
         console.log(`✅ WhatsApp config loaded from KV for customer ${customerId}:`, { enabled: storedConfig.enabled, businessName: storedConfig.businessName });
         return NextResponse.json({ config: storedConfig });
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       console.log(`✅ WhatsApp config saved to KV for customer ${customerId}`);
       
       // Verify the config was saved correctly by reading it back
-      const verifyConfig = await kv.get(`whatsapp-config:${customerId}`);
+      const verifyConfig = await kv.get(`whatsapp-config:${customerId}`) as WhatsAppConfig | null;
       if (verifyConfig) {
         console.log(`🔍 Verification: Config saved correctly with enabled: ${verifyConfig.enabled}`);
         console.log(`🔍 Verification: Full saved config:`, JSON.stringify(verifyConfig, null, 2));
