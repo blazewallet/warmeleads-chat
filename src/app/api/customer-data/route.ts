@@ -32,14 +32,25 @@ export async function GET(request: NextRequest) {
       const blobName = `${BLOB_STORE_PREFIX}/${customerId}.json`;
       
       try {
-        const response = await fetch(`https://blob.vercel-storage.com/${blobName}`, {
-          headers: {
-            'Authorization': `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`
-          }
+        // Use Vercel Blob Storage API to get the blob
+        const { blobs } = await list({
+          prefix: blobName,
+          token: process.env.BLOB_READ_WRITE_TOKEN
         });
         
-        if (!response.ok) {
+        if (blobs.length === 0) {
           console.log(`ℹ️ No blob found for customer ${customerId}`);
+          return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+        }
+        
+        // Get the first blob (should be only one)
+        const blob = blobs[0];
+        console.log(`📁 Found blob for customer ${customerId}:`, blob.url);
+        
+        // Fetch the blob content
+        const response = await fetch(blob.url);
+        if (!response.ok) {
+          console.log(`ℹ️ Failed to fetch blob content for customer ${customerId}`);
           return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
         }
         
