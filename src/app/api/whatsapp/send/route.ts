@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
             const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
             const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
             const twilioWhatsAppNumber = 'whatsapp:+31850477067'; // Your WhatsApp Business number
-            const twilioMessagingServiceSid = 'MGdd1866d87a5fd62a061cd3a0d35af598'; // Your Messaging Service SID
             
             if (!twilioAccountSid || !twilioAuthToken) {
               console.error('❌ Twilio WhatsApp credentials not configured');
@@ -99,7 +98,7 @@ export async function POST(request: NextRequest) {
                 'Content-Type': 'application/x-www-form-urlencoded',
               },
               body: new URLSearchParams({
-                MessagingServiceSid: twilioMessagingServiceSid, // Use Messaging Service instead of From
+                From: twilioWhatsAppNumber, // Use direct WhatsApp number instead of Messaging Service
                 To: formattedPhone, // whatsapp:+31612345678
                 Body: processedMessage
               })
