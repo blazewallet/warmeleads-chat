@@ -63,67 +63,101 @@ export async function POST(request: NextRequest) {
     console.log(`📤 Sending WhatsApp message to ${phoneNumber} for customer ${customerId}`);
     console.log(`📝 Message: ${processedMessage}`);
 
-    let result;
+    // TWILIO WhatsApp Business API Implementation
+    console.log(`📤 [TWILIO] Sending WhatsApp message to ${phoneNumber}`);
+    console.log(`📝 [TWILIO] Message: ${processedMessage}`);
     
-            // TWILIO WhatsApp Business API Implementation
-            console.log(`📤 [TWILIO] Sending WhatsApp message to ${phoneNumber}`);
-            console.log(`📝 [TWILIO] Message: ${processedMessage}`);
-            
-            // Get Twilio credentials from environment
-            const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-            const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-            const twilioWhatsAppNumber = 'whatsapp:+31850477067'; // Your WhatsApp Business number
-            
-            if (!twilioAccountSid || !twilioAuthToken) {
-              console.error('❌ Twilio WhatsApp credentials not configured');
-              return NextResponse.json({
-                success: false,
-                error: 'Twilio WhatsApp not configured. Please contact support.'
-              }, { status: 500 });
-            }
-            
-            // Format phone number for Twilio (whatsapp:+31...)
-            const formattedPhone = phoneNumber.startsWith('whatsapp:') 
-              ? phoneNumber 
-              : `whatsapp:${phoneNumber.replace(/^\+/, '')}`;
-            
-            // Create Twilio API URL
-            const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
-            
-            // Send message via Twilio WhatsApp API
-            const twilioResponse = await fetch(twilioUrl, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64')}`,
-                'Content-Type': 'application/x-www-form-urlencoded',
-              },
-              body: new URLSearchParams({
-                From: twilioWhatsAppNumber, // Use direct WhatsApp number instead of Messaging Service
-                To: formattedPhone, // whatsapp:+31612345678
-                Body: processedMessage
-              })
-            });
-            
-            const twilioData = await twilioResponse.json();
-            
-            if (twilioResponse.ok && twilioData.sid) {
-              result = {
-                success: true,
-                messageId: twilioData.sid
-              };
-              console.log(`✅ Twilio WhatsApp message sent successfully: ${result.messageId}`);
-            } else {
-              console.error('❌ Twilio WhatsApp API error:', twilioData);
-              result = {
-                success: false,
-                error: twilioData.message || 'Failed to send WhatsApp message via Twilio'
-              };
-            }
+    // Get Twilio credentials from environment
+    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioWhatsAppNumber = 'whatsapp:+31850477067'; // Your WhatsApp Business number
+    
+    console.log(`🔑 Twilio Account SID: ${twilioAccountSid ? 'SET' : 'NOT SET'}`);
+    console.log(`🔑 Twilio Auth Token: ${twilioAuthToken ? 'SET' : 'NOT SET'}`);
+    console.log(`📱 WhatsApp Number: ${twilioWhatsAppNumber}`);
+    
+    if (!twilioAccountSid || !twilioAuthToken) {
+      console.error('❌ Twilio WhatsApp credentials not configured');
+      return NextResponse.json({
+        success: false,
+        error: 'Twilio WhatsApp not configured. Please contact support.'
+      }, { status: 500 });
+    }
+    
+    // Format phone number for Twilio (whatsapp:+31...)
+    const formattedPhone = phoneNumber.startsWith('whatsapp:') 
+      ? phoneNumber 
+      : `whatsapp:${phoneNumber.replace(/^\+/, '')}`;
+    
+    console.log(`📞 Formatted phone: ${formattedPhone}`);
+    
+    // Create Twilio API URL
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
+    console.log(`🌐 Twilio API URL: ${twilioUrl}`);
+    
+    // Prepare request body
+    const requestBody = new URLSearchParams({
+      From: twilioWhatsAppNumber,
+      To: formattedPhone,
+      Body: processedMessage
+    });
+    
+    console.log(`📝 Request body:`, {
+      From: twilioWhatsAppNumber,
+      To: formattedPhone,
+      Body: processedMessage.substring(0, 100) + '...'
+    });
+    
+    // Send message via Twilio WhatsApp API
+    const twilioResponse = await fetch(twilioUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: requestBody
+    });
+    
+    console.log(`📡 Twilio response status: ${twilioResponse.status}`);
+    console.log(`📡 Twilio response headers:`, Object.fromEntries(twilioResponse.headers.entries()));
+    
+    const twilioData = await twilioResponse.json();
+    console.log(`📡 Twilio response data:`, twilioData);
+    
+    let result;
+    if (twilioResponse.ok && twilioData.sid) {
+      result = {
+        success: true,
+        messageId: twilioData.sid
+      };
+      console.log(`✅ Twilio WhatsApp message sent successfully: ${result.messageId}`);
+    } else {
+      console.error('❌ Twilio WhatsApp API error:', twilioData);
+      result = {
+        success: false,
+        error: twilioData.message || 'Failed to send WhatsApp message via Twilio'
+      };
+    }
 
     if (result.success) {
       // Update usage counter
       config.usage.messagesSent++;
       
+      // Log the message
+      await WhatsAppService.logMessage({
+        id: result.messageId,
+        customerId,
+        leadId: leadId || 'unknown',
+        phoneNumber,
+        message: processedMessage,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+        type: 'template',
+        templateName: template || 'newLead',
+        direction: 'outgoing',
+        retryCount: 0
+      });
+
       // Save updated config
       await fetch(`${request.nextUrl.origin}/api/whatsapp/config`, {
         method: 'POST',
@@ -153,7 +187,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: false,
-        error: 'Failed to send message'
+        error: result.error || 'Failed to send message'
       }, { status: 500 });
     }
   } catch (error) {
