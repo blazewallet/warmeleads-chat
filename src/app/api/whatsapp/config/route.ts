@@ -30,7 +30,21 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ config: storedConfig });
       }
     } catch (kvError) {
-      console.log(`ℹ️ KV storage not available, using default config:`, kvError);
+      console.log(`ℹ️ KV storage not available, trying customer data backup:`, kvError);
+      
+      // Fallback: Check customer data for WhatsApp config
+      try {
+        const customerDataResponse = await fetch(`${request.nextUrl.origin}/api/customer-data?customerId=${customerId}`);
+        if (customerDataResponse.ok) {
+          const customerData = await customerDataResponse.json();
+          if (customerData.whatsappConfig) {
+            console.log(`✅ WhatsApp config loaded from customer data backup for customer ${customerId}:`, { enabled: customerData.whatsappConfig.enabled, businessName: customerData.whatsappConfig.businessName });
+            return NextResponse.json({ config: customerData.whatsappConfig });
+          }
+        }
+      } catch (customerDataError) {
+        console.log(`ℹ️ Customer data backup also failed:`, customerDataError);
+      }
     }
 
     // Return default config if none exists
@@ -129,9 +143,28 @@ export async function POST(request: NextRequest) {
       }
     } catch (kvError) {
       console.error(`❌ Failed to save config to KV:`, kvError);
-      // Fallback to in-memory storage if KV fails
-      console.log(`🔄 Falling back to in-memory storage...`);
-      // Note: In-memory storage won't work across serverless functions, but it's better than nothing
+      console.log(`🔄 KV storage failed, but continuing with response...`);
+      // Continue with the response even if KV fails
+    }
+    
+    // Also store in customer data as backup
+    try {
+      const customerDataResponse = await fetch(`${request.nextUrl.origin}/api/customer-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId,
+          whatsappConfig: configToSave
+        })
+      });
+      
+      if (customerDataResponse.ok) {
+        console.log(`✅ WhatsApp config also saved to customer data for customer ${customerId}`);
+      } else {
+        console.log(`ℹ️ Failed to save WhatsApp config to customer data, but continuing...`);
+      }
+    } catch (customerDataError) {
+      console.log(`ℹ️ Customer data backup failed, but continuing:`, customerDataError);
     }
     
     return NextResponse.json({ 
