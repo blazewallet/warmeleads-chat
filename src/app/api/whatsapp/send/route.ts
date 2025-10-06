@@ -150,6 +150,7 @@ export async function POST(request: NextRequest) {
         leadId: leadId || 'unknown',
         phoneNumber,
         message: processedMessage,
+        template: template || 'newLead',
         status: 'sent',
         sentAt: new Date().toISOString(),
         type: 'template',
