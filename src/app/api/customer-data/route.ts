@@ -107,19 +107,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customerId, customerData } = body;
+    const { customerId, customerData, whatsappConfig } = body;
     
     console.log('💾 POST /api/customer-data');
     console.log('  Customer ID:', customerId);
     console.log('  Email:', customerData?.email);
     console.log('  Has Google Sheet URL:', !!customerData?.googleSheetUrl);
     console.log('  Email notifications enabled:', customerData?.emailNotifications?.enabled);
+    console.log('  Has WhatsApp config:', !!whatsappConfig);
     console.log('  Blob storage configured:', isBlobStorageConfigured());
     
-    if (!customerId || !customerData) {
+    if (!customerId || (!customerData && !whatsappConfig)) {
       console.error('❌ Missing required fields');
       return NextResponse.json(
-        { error: 'Customer ID and customer data are required' },
+        { error: 'Customer ID and customer data or WhatsApp config are required' },
         { status: 400 }
       );
     }
@@ -133,11 +134,51 @@ export async function POST(request: NextRequest) {
     }
 
     const blobName = `${BLOB_STORE_PREFIX}/${customerId}.json`;
-    const dataToStore = {
-      ...customerData,
-      customerId,
-      lastUpdated: new Date().toISOString()
-    };
+    
+    // If we're only updating WhatsApp config, get existing customer data first
+    let dataToStore;
+    if (whatsappConfig && !customerData) {
+      // Only updating WhatsApp config, get existing customer data
+      try {
+        const existingResponse = await fetch(`https://blob.vercel-storage.com/${blobName}`, {
+          headers: {
+            'Authorization': `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`
+          }
+        });
+        
+        if (existingResponse.ok) {
+          const existingData = await existingResponse.json();
+          dataToStore = {
+            ...existingData,
+            whatsappConfig,
+            lastUpdated: new Date().toISOString()
+          };
+          console.log('📝 Updating existing customer data with WhatsApp config');
+        } else {
+          // No existing data, create new with just WhatsApp config
+          dataToStore = {
+            customerId,
+            whatsappConfig,
+            lastUpdated: new Date().toISOString()
+          };
+          console.log('📝 Creating new customer data with WhatsApp config');
+        }
+      } catch (error) {
+        console.log('ℹ️ No existing customer data found, creating new with WhatsApp config');
+        dataToStore = {
+          customerId,
+          whatsappConfig,
+          lastUpdated: new Date().toISOString()
+        };
+      }
+    } else {
+      // Normal customer data update
+      dataToStore = {
+        ...customerData,
+        customerId,
+        lastUpdated: new Date().toISOString()
+      };
+    }
 
     console.log('💾 Writing customer data to blob storage:');
     console.log('  Blob name:', blobName);
