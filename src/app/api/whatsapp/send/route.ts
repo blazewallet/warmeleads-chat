@@ -63,20 +63,22 @@ export async function POST(request: NextRequest) {
     console.log(`📤 Sending WhatsApp message to ${phoneNumber} for customer ${customerId}`);
     console.log(`📝 Message: ${processedMessage}`);
 
-    // TWILIO WhatsApp Business API Implementation
-    console.log(`📤 [TWILIO] Sending WhatsApp message to ${phoneNumber}`);
-    console.log(`📝 [TWILIO] Message: ${processedMessage}`);
+    // QUICKPULSE-STYLE TWILIO WHATSAPP BUSINESS API Implementation
+    console.log(`📤 [QUICKPULSE-STYLE TWILIO] Sending WhatsApp message to ${phoneNumber}`);
+    console.log(`📝 [QUICKPULSE-STYLE TWILIO] Message: ${processedMessage}`);
     
     // Get Twilio credentials from environment
     const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
     const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-    const twilioWhatsAppNumber = 'whatsapp:+31850477067'; // Your WhatsApp Business number
+    const twilioMessagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+    const twilioContentSid = process.env.TWILIO_CONTENT_SID || 'HX1234567890abcdef1234567890abcdef'; // Default template
     
     console.log(`🔑 Twilio Account SID: ${twilioAccountSid ? 'SET' : 'NOT SET'}`);
     console.log(`🔑 Twilio Auth Token: ${twilioAuthToken ? 'SET' : 'NOT SET'}`);
-    console.log(`📱 WhatsApp Number: ${twilioWhatsAppNumber}`);
+    console.log(`🔑 Twilio Messaging Service SID: ${twilioMessagingServiceSid ? 'SET' : 'NOT SET'}`);
+    console.log(`🔑 Twilio Content SID: ${twilioContentSid ? 'SET' : 'NOT SET'}`);
     
-    if (!twilioAccountSid || !twilioAuthToken) {
+    if (!twilioAccountSid || !twilioAuthToken || !twilioMessagingServiceSid) {
       console.error('❌ Twilio WhatsApp credentials not configured');
       return NextResponse.json({
         success: false,
@@ -95,20 +97,28 @@ export async function POST(request: NextRequest) {
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
     console.log(`🌐 Twilio API URL: ${twilioUrl}`);
     
-    // Prepare request body
+    // Prepare placeholders for Twilio template (QuickPulse style)
+    const placeholders = {
+      "1": leadName || "Lead",
+      "2": config.businessName || "WarmeLeads"
+    };
+    
+    // Prepare request body (QuickPulse style with ContentSid)
     const requestBody = new URLSearchParams({
-      From: twilioWhatsAppNumber,
       To: formattedPhone,
-      Body: processedMessage
+      MessagingServiceSid: twilioMessagingServiceSid,
+      ContentSid: twilioContentSid,
+      ContentVariables: JSON.stringify(placeholders)
     });
     
-    console.log(`📝 Request body:`, {
-      From: twilioWhatsAppNumber,
+    console.log(`📝 Request body (QuickPulse style):`, {
       To: formattedPhone,
-      Body: processedMessage.substring(0, 100) + '...'
+      MessagingServiceSid: twilioMessagingServiceSid,
+      ContentSid: twilioContentSid,
+      ContentVariables: JSON.stringify(placeholders)
     });
     
-    // Send message via Twilio WhatsApp API
+    // Send message via Twilio WhatsApp API (QuickPulse style)
     const twilioResponse = await fetch(twilioUrl, {
       method: 'POST',
       headers: {
@@ -130,7 +140,7 @@ export async function POST(request: NextRequest) {
         success: true,
         messageId: twilioData.sid
       };
-      console.log(`✅ Twilio WhatsApp message sent successfully: ${result.messageId}`);
+      console.log(`✅ Twilio WhatsApp message sent successfully (QuickPulse style): ${result.messageId}`);
     } else {
       console.error('❌ Twilio WhatsApp API error:', twilioData);
       result = {
