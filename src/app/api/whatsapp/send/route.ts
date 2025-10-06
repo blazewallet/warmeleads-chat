@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     // Format phone number for Twilio (whatsapp:+31...)
     const formattedPhone = phoneNumber.startsWith('whatsapp:') 
       ? phoneNumber 
-      : `whatsapp:${phoneNumber.replace(/^\+/, '')}`;
+      : `whatsapp:${phoneNumber.replace(/^\+/, '').replace(/\s/g, '')}`;
     
     console.log(`📞 Formatted phone: ${formattedPhone}`);
     
