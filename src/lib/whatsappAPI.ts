@@ -76,6 +76,9 @@ export interface WhatsAppMessage {
   readAt?: string;
   errorMessage?: string;
   retryCount: number;
+  type?: string;
+  templateName?: string;
+  direction?: 'incoming' | 'outgoing';
 }
 
 // Default Templates
