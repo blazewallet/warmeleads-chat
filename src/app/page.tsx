@@ -19,9 +19,11 @@ type PageState = 'landing' | 'chat' | 'info' | 'faq' | 'customer' | 'login' | 'g
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageState>('landing');
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, init } = useAuthStore();
 
   useEffect(() => {
+    // Initialize auth state from localStorage
+    init();
     setIsLoaded(true);
     
     console.log('🏠 Homepage: Loaded, auth state:', { 
@@ -39,7 +41,7 @@ export default function HomePage() {
       ChatContextManager.setContext('roi');
       setCurrentPage('chat');
     }
-  }, [isAuthenticated, user]);
+  }, [init]);
 
   // Note: Removed auto-redirect to portal - users should be able to visit homepage while logged in
 

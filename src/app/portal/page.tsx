@@ -7,7 +7,12 @@ import { useAuthStore } from '@/lib/auth';
 
 export default function PortalPage() {
   const router = useRouter();
-  const { logout } = useAuthStore();
+  const { logout, init } = useAuthStore();
+
+  // Initialize auth state on portal load
+  React.useEffect(() => {
+    init();
+  }, [init]);
 
   const handleBackToHome = () => {
     // Navigate to homepage WITHOUT logging out - user stays logged in

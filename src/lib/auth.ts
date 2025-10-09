@@ -38,6 +38,7 @@ export interface AuthState {
   updateProfile: (updates: Partial<User>) => void;
   createAccountFromGuest: (userData: RegisterData) => Promise<void>;
   clearError: () => void;
+  init: () => void;
 }
 
 export interface RegisterData {
@@ -126,57 +127,64 @@ const mockUsers: User[] = [
 let nextUserId = 4;
 
 export const useAuthStore = create<AuthState>()(
-  // Temporarily disable persist to test if that's causing the logout issue
-  // persist(
-    (set, get) => ({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false, // No persist, so no loading needed
-      error: null,
+  (set, get) => ({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+    error: null,
 
-      login: async (email: string, password: string) => {
-        set({ isLoading: true, error: null });
+    login: async (email: string, password: string) => {
+      set({ isLoading: true, error: null });
+      
+      try {
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        try {
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const existingUser = mockUsers.find(u => u.email === email);
-          
-          if (!existingUser) {
-            throw new Error('Gebruiker niet gevonden');
-          }
-          
-          // Check password based on user type
-          let validPassword = false;
-          if (email === 'demo@warmeleads.eu' && password === 'demo123') {
-            validPassword = true;
-          } else if (email === 'h.schlimback@gmail.com' && password === 'Ab49n805!') {
-            validPassword = true;
-          } else if (email === 'rick@warmeleads.eu' && password === 'Ab49n805!') {
-            validPassword = true;
-          }
-          
-          if (!validPassword) {
-            throw new Error('Ongeldig wachtwoord');
-          }
-          
-          const user = { ...existingUser, lastLogin: new Date() };
-          
-          set({ 
-            user, 
-            isAuthenticated: true, 
-            isLoading: false,
-            error: null 
-          });
-          
-        } catch (error) {
-          set({ 
-            error: error instanceof Error ? error.message : 'Login mislukt', 
-            isLoading: false 
-          });
+        const existingUser = mockUsers.find(u => u.email === email);
+        
+        if (!existingUser) {
+          throw new Error('Gebruiker niet gevonden');
         }
-      },
+        
+        // Check password based on user type
+        let validPassword = false;
+        if (email === 'demo@warmeleads.eu' && password === 'demo123') {
+          validPassword = true;
+        } else if (email === 'h.schlimback@gmail.com' && password === 'Ab49n805!') {
+          validPassword = true;
+        } else if (email === 'rick@warmeleads.eu' && password === 'Ab49n805!') {
+          validPassword = true;
+        }
+        
+        if (!validPassword) {
+          throw new Error('Ongeldig wachtwoord');
+        }
+        
+        const user = { ...existingUser, lastLogin: new Date() };
+        
+        console.log('🔐 LOGIN SUCCESS:', { email, isAuthenticated: true });
+        
+        set({ 
+          user, 
+          isAuthenticated: true, 
+          isLoading: false,
+          error: null 
+        });
+        
+        // Store in localStorage manually for persistence
+        localStorage.setItem('warmeleads-auth', JSON.stringify({
+          user,
+          isAuthenticated: true,
+          timestamp: Date.now()
+        }));
+        
+      } catch (error) {
+        set({ 
+          error: error instanceof Error ? error.message : 'Login mislukt', 
+          isLoading: false 
+        });
+      }
+    },
 
       register: async (userData: RegisterData) => {
         set({ isLoading: true, error: null });
@@ -242,7 +250,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        console.log('🚨 LOGOUT AANGEROEPEN - Stack trace:', new Error().stack);
+        console.log('🚨 EXPLICIT LOGOUT - Stack trace:', new Error().stack);
         set({ 
           user: null, 
           isAuthenticated: false, 
@@ -250,7 +258,8 @@ export const useAuthStore = create<AuthState>()(
           error: null 
         });
         
-        // Clear localStorage voor bezoekers tracking
+        // Clear all auth data
+        localStorage.removeItem('warmeleads-auth');
         localStorage.removeItem('warmeleads_visited');
       },
 
@@ -311,50 +320,35 @@ export const useAuthStore = create<AuthState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      // Initialize auth state from localStorage
+      init: () => {
+        try {
+          const authData = localStorage.getItem('warmeleads-auth');
+          if (authData) {
+            const parsed = JSON.parse(authData);
+            // Check if auth data is not too old (24 hours)
+            if (parsed.timestamp && (Date.now() - parsed.timestamp) < 24 * 60 * 60 * 1000) {
+              console.log('🔄 RESTORING AUTH FROM LOCALSTORAGE:', { 
+                email: parsed.user?.email, 
+                isAuthenticated: parsed.isAuthenticated 
+              });
+              set({
+                user: parsed.user,
+                isAuthenticated: parsed.isAuthenticated,
+                isLoading: false,
+                error: null
+              });
+            } else {
+              console.log('🕐 AUTH DATA TOO OLD, CLEARING');
+              localStorage.removeItem('warmeleads-auth');
+            }
+          }
+        } catch (error) {
+          console.error('Error restoring auth:', error);
+          localStorage.removeItem('warmeleads-auth');
+        }
       }
     })
-    // Temporarily disable persist to test if that's causing the logout issue
-    // , {
-    //   name: 'warmeleads-auth-store',
-    //   partialize: (state) => ({ 
-    //     user: state.user, 
-    //     isAuthenticated: state.isAuthenticated 
-    //   }),
-    //   onRehydrateStorage: () => (state) => {
-    //     // Set loading to false after rehydration is complete
-    //     if (state) {
-    //       console.log('🔄 Auth store rehydrated:', { 
-    //         isAuthenticated: state.isAuthenticated, 
-    //         userEmail: state.user?.email,
-    //         isLoading: state.isLoading 
-    //       });
-    //       state.isLoading = false;
-    //     }
-    //   },
-    //   storage: {
-    //     getItem: (name) => {
-    //       try {
-    //         const value = localStorage.getItem(name);
-    //         return value ? JSON.parse(value) : null;
-    //       } catch (error) {
-    //         console.error('Error reading from localStorage:', error);
-    //         return null;
-    //       }
-    //     },
-    //     setItem: (name, value) => {
-    //       try {
-    //         localStorage.setItem(name, JSON.stringify(value));
-    //       } catch (error) {
-    //         console.error('Error writing to localStorage:', error);
-    //       }
-    //     },
-    //     removeItem: (name) => {
-    //       try {
-    //         localStorage.removeItem(name);
-    //       } catch (error) {
-    //         console.error('Error removing from localStorage:', error);
-    //       }
-    //     }
-    //   }
-    // }
 );
