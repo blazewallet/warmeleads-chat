@@ -126,11 +126,12 @@ const mockUsers: User[] = [
 let nextUserId = 4;
 
 export const useAuthStore = create<AuthState>()(
-  persist(
+  // Temporarily disable persist to test if that's causing the logout issue
+  // persist(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: true, // Start with loading true to prevent race conditions
+      isLoading: false, // No persist, so no loading needed
       error: null,
 
       login: async (email: string, password: string) => {
@@ -311,49 +312,50 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => {
         set({ error: null });
       }
-    }),
-    {
-      name: 'warmeleads-auth-store',
-      partialize: (state) => ({ 
-        user: state.user, 
-        isAuthenticated: state.isAuthenticated 
-      }),
-      onRehydrateStorage: () => (state) => {
-        // Set loading to false after rehydration is complete
-        if (state) {
-          console.log('🔄 Auth store rehydrated:', { 
-            isAuthenticated: state.isAuthenticated, 
-            userEmail: state.user?.email,
-            isLoading: state.isLoading 
-          });
-          state.isLoading = false;
-        }
-      },
-      storage: {
-        getItem: (name) => {
-          try {
-            const value = localStorage.getItem(name);
-            return value ? JSON.parse(value) : null;
-          } catch (error) {
-            console.error('Error reading from localStorage:', error);
-            return null;
-          }
-        },
-        setItem: (name, value) => {
-          try {
-            localStorage.setItem(name, JSON.stringify(value));
-          } catch (error) {
-            console.error('Error writing to localStorage:', error);
-          }
-        },
-        removeItem: (name) => {
-          try {
-            localStorage.removeItem(name);
-          } catch (error) {
-            console.error('Error removing from localStorage:', error);
-          }
-        }
-      }
-    }
+    })
+    // Temporarily disable persist to test if that's causing the logout issue
+    // , {
+    //   name: 'warmeleads-auth-store',
+    //   partialize: (state) => ({ 
+    //     user: state.user, 
+    //     isAuthenticated: state.isAuthenticated 
+    //   }),
+    //   onRehydrateStorage: () => (state) => {
+    //     // Set loading to false after rehydration is complete
+    //     if (state) {
+    //       console.log('🔄 Auth store rehydrated:', { 
+    //         isAuthenticated: state.isAuthenticated, 
+    //         userEmail: state.user?.email,
+    //         isLoading: state.isLoading 
+    //       });
+    //       state.isLoading = false;
+    //     }
+    //   },
+    //   storage: {
+    //     getItem: (name) => {
+    //       try {
+    //         const value = localStorage.getItem(name);
+    //         return value ? JSON.parse(value) : null;
+    //       } catch (error) {
+    //         console.error('Error reading from localStorage:', error);
+    //         return null;
+    //       }
+    //     },
+    //     setItem: (name, value) => {
+    //       try {
+    //         localStorage.setItem(name, JSON.stringify(value));
+    //       } catch (error) {
+    //         console.error('Error writing to localStorage:', error);
+    //       }
+    //     },
+    //     removeItem: (name) => {
+    //       try {
+    //         localStorage.removeItem(name);
+    //       } catch (error) {
+    //         console.error('Error removing from localStorage:', error);
+    //       }
+    //     }
+    //   }
+    // }
   )
 );
