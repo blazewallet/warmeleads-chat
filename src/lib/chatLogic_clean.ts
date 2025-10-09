@@ -1292,3 +1292,5 @@ export function generatePersonalizedRecommendation(profile: UserProfile): string
 
   return `Ik raad een mix van beide aan: start met gedeelde leads om te testen, schakel over naar exclusieve leads voor uw beste campagnes!`;
 }
+
+

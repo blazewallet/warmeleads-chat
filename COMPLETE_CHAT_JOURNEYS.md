@@ -271,3 +271,5 @@ contact_details → payment_ready → payment_redirect
 - ✅ Gebruikers kunnen altijd verder
 
 **De website is nu volledig geoptimaliseerd en geperfectioneerd!** 🎉
+
+

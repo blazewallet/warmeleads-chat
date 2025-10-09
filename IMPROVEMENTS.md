@@ -193,3 +193,5 @@ Alle kritieke problemen zijn opgelost:
 - ✅ Performance is geoptimaliseerd
 
 De website is nu productie-klaar met proper error handling, logging, en een veel betere gebruikerservaring.
+
+

@@ -60,6 +60,9 @@ export interface WhatsAppConfig {
     messagesLimit: number;
     setupPaid: boolean; // €750 voor eigen nummer
   };
+  
+  // Message History for Analytics
+  messageHistory?: WhatsAppMessage[];
 }
 
 // Message Status Interface
@@ -72,6 +75,7 @@ export interface WhatsAppMessage {
   template: string;
   status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   sentAt: string;
+  timestamp: string; // For analytics compatibility
   deliveredAt?: string;
   readAt?: string;
   errorMessage?: string;

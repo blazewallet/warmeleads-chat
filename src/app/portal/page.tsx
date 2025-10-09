@@ -10,11 +10,8 @@ export default function PortalPage() {
   const { logout } = useAuthStore();
 
   const handleBackToHome = () => {
-    // Logout user first, then redirect to homepage
-    logout();
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 100);
+    // Navigate to homepage WITHOUT logging out - user stays logged in
+    router.push('/');
   };
 
   const handleStartChat = () => {

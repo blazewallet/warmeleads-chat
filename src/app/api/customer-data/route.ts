@@ -128,12 +128,38 @@ export async function POST(request: NextRequest) {
     console.log('  Has WhatsApp config:', !!whatsappConfig);
     console.log('  Blob storage configured:', isBlobStorageConfigured());
     
+    // Input validation
     if (!customerId || (!customerData && !whatsappConfig)) {
       console.error('❌ Missing required fields');
       return NextResponse.json(
         { error: 'Customer ID and customer data or WhatsApp config are required' },
         { status: 400 }
       );
+    }
+
+    // Validate customerId format (email)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(customerId)) {
+      return NextResponse.json(
+        { error: 'Invalid customer ID format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate customerData if provided
+    if (customerData) {
+      if (customerData.email && !emailRegex.test(customerData.email)) {
+        return NextResponse.json(
+          { error: 'Invalid email format in customer data' },
+          { status: 400 }
+        );
+      }
+      if (customerData.googleSheetUrl && !customerData.googleSheetUrl.startsWith('https://')) {
+        return NextResponse.json(
+          { error: 'Google Sheet URL must use HTTPS' },
+          { status: 400 }
+        );
+      }
     }
 
     if (!isBlobStorageConfigured()) {

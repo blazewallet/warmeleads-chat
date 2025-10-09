@@ -241,14 +241,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        console.log('Logout aangeroepen');
         set({ 
           user: null, 
           isAuthenticated: false, 
           isLoading: false,
           error: null 
         });
-        console.log('State bijgewerkt naar logged out');
         
         // Clear localStorage voor bezoekers tracking
         localStorage.removeItem('warmeleads_visited');
@@ -319,9 +317,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user, 
         isAuthenticated: state.isAuthenticated 
       }),
-      onRehydrateStorage: () => (state) => {
-        console.log('Auth state gerehydrateerd:', state);
-      },
+      // Auth state rehydration callback removed for production
       // Better mobile compatibility
       storage: {
         getItem: (name) => {

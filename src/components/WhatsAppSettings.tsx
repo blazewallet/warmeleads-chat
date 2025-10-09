@@ -33,6 +33,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
   const [isSaving, setIsSaving] = useState(false);
   const [testMessage, setTestMessage] = useState('');
   const [testPhone, setTestPhone] = useState('');
+  const [useFreeFormTest, setUseFreeFormTest] = useState(false); // Default to template (more reliable)
   const [showSetupModal, setShowSetupModal] = useState(false);
 
   // Load WhatsApp config
@@ -132,9 +133,14 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
           enabled: result.config?.enabled, 
           businessName: result.config?.businessName 
         });
+        
+        // Update local state with the saved config to ensure consistency
+        if (result.config) {
+          setConfig(result.config);
+          console.log('✅ Local state updated with saved config:', { enabled: result.config.enabled });
+        }
+        
         alert('✅ WhatsApp configuratie opgeslagen!');
-        // Don't reload config, just update local state
-        console.log('✅ Config saved successfully, keeping local state');
       } else if (response.status === 402) {
         // Payment required for own number setup
         console.log('💳 Payment required for own number setup');
@@ -198,7 +204,8 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
           phoneNumber: testPhone,
           message: testMessage,
           leadName: 'Test Lead',
-          product: 'Test Product'
+          product: 'Test Product',
+          useFreeForm: useFreeFormTest // Use toggle setting for test
         })
       });
 
@@ -233,23 +240,23 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+          className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-2 sm:mx-0"
         >
-          <div className="p-6">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
-                  <ChatBubbleLeftRightIcon className="w-6 h-6 text-green-600" />
+          <div className="p-4 sm:p-6">
+            {/* Header - Mobile Optimized */}
+            <div className="flex justify-between items-start sm:items-center mb-4 sm:mb-6">
+              <div className="flex items-center space-x-2 sm:space-x-3 flex-1">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+                  <ChatBubbleLeftRightIcon className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                 </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">WhatsApp Business API</h3>
-                  <p className="text-gray-600">Configureer automatische WhatsApp berichten</p>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg sm:text-2xl font-bold text-gray-900">WhatsApp Business API</h3>
+                  <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Configureer automatische WhatsApp berichten</p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
               >
                 <XCircleIcon className="w-6 h-6" />
               </button>
@@ -261,17 +268,17 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                 <p className="text-gray-600">WhatsApp configuratie laden...</p>
               </div>
             ) : config ? (
-              <div className="space-y-8">
-                {/* Enable/Disable Toggle */}
-                <div className="bg-gray-50 rounded-xl p-6">
+              <div className="space-y-4 sm:space-y-8">
+                {/* Enable/Disable Toggle - Mobile Optimized */}
+                <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-lg font-semibold text-gray-900">WhatsApp Berichten</h4>
-                      <p className="text-gray-600">Schakel automatische WhatsApp berichten in/uit</p>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-base sm:text-lg font-semibold text-gray-900">WhatsApp Berichten</h4>
+                      <p className="text-sm sm:text-base text-gray-600">Schakel automatische WhatsApp berichten in/uit</p>
                     </div>
                     <button
                       onClick={() => setConfig({ ...config, enabled: !config.enabled })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-3 ${
                         config.enabled ? 'bg-green-600' : 'bg-gray-300'
                       }`}
                     >
@@ -284,30 +291,32 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                   </div>
                 </div>
 
-                {/* WhatsApp Number Selection */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">WhatsApp Nummer</h4>
+                {/* WhatsApp Number Selection - Mobile Optimized */}
+                <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">WhatsApp Nummer</h4>
                   
                   {/* Warmeleads Option */}
-                  <div className="mb-4">
-                    <label className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <div className="mb-3 sm:mb-4">
+                    <label className="flex items-start space-x-3 p-3 sm:p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
                       <input
                         type="radio"
                         name="whatsappNumber"
                         checked={!config.useOwnNumber}
                         onChange={() => setConfig({ ...config, useOwnNumber: false })}
-                        className="h-4 w-4 text-green-600"
+                        className="h-4 w-4 text-green-600 mt-1 flex-shrink-0"
                       />
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <PhoneIcon className="w-5 h-5 text-green-600" />
-                          <span className="font-medium text-gray-900">Warmeleads WhatsApp Business</span>
-                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">GRATIS</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+                          <div className="flex items-center space-x-2">
+                            <PhoneIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
+                            <span className="font-medium text-gray-900 text-sm sm:text-base">Warmeleads WhatsApp Business</span>
+                          </div>
+                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full self-start">GRATIS</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-xs sm:text-sm text-gray-600 mt-1">
                           Berichten worden verzonden via Warmeleads WhatsApp Business nummer
                         </p>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1">
                           📱 {config.warmeleadsNumber}
                         </p>
                       </div>
@@ -316,27 +325,29 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
 
                   {/* Customer Own Number Option */}
                   <div>
-                    <label className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <label className="flex items-start space-x-3 p-3 sm:p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
                       <input
                         type="radio"
                         name="whatsappNumber"
                         checked={config.useOwnNumber}
                         onChange={() => setConfig({ ...config, useOwnNumber: true })}
-                        className="h-4 w-4 text-green-600"
+                        className="h-4 w-4 text-green-600 mt-1 flex-shrink-0"
                       />
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <PhoneIcon className="w-5 h-5 text-blue-600" />
-                          <span className="font-medium text-gray-900">Eigen WhatsApp Business</span>
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">€750 SETUP</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+                          <div className="flex items-center space-x-2">
+                            <PhoneIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
+                            <span className="font-medium text-gray-900 text-sm sm:text-base">Eigen WhatsApp Business</span>
+                          </div>
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full self-start">€750 SETUP</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-xs sm:text-sm text-gray-600 mt-1">
                           Koppel je eigen WhatsApp Business nummer voor volledige controle
                         </p>
                         {!config.billing?.setupPaid && (
                           <div className="flex items-center space-x-2 mt-2">
-                            <ExclamationTriangleIcon className="w-4 h-4 text-amber-500" />
-                            <span className="text-sm text-amber-600">
+                            <ExclamationTriangleIcon className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                            <span className="text-xs sm:text-sm text-amber-600">
                               Setup vereist: €750 eenmalige kosten
                             </span>
                           </div>
@@ -346,10 +357,10 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                   </div>
                 </div>
 
-                {/* Business Information */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Bedrijfsinformatie</h4>
-                  <div className="space-y-4">
+                {/* Business Information - Mobile Optimized */}
+                <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Bedrijfsinformatie</h4>
+                  <div className="space-y-3 sm:space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Bedrijfsnaam
@@ -359,7 +370,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                         value={config.businessName}
                         onChange={(e) => setConfig({ ...config, businessName: e.target.value })}
                         placeholder="Uw bedrijfsnaam"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
                     {config.useOwnNumber && (
@@ -372,17 +383,17 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                           value={config.businessPhone || ''}
                           onChange={(e) => setConfig({ ...config, businessPhone: e.target.value })}
                           placeholder="+31 6 12345678"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                          className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                         />
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Message Templates */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Bericht Templates</h4>
-                  <div className="space-y-4">
+                {/* Message Templates - Mobile Optimized */}
+                <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Bericht Templates</h4>
+                  <div className="space-y-3 sm:space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Nieuwe Lead Template
@@ -393,8 +404,8 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                           ...config, 
                           templates: { ...config.templates, newLead: e.target.value }
                         })}
-                        rows={6}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        rows={4}
+                        className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
                         placeholder="Bericht template voor nieuwe leads..."
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -404,10 +415,10 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                   </div>
                 </div>
 
-                {/* Timing Settings */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Timing Instellingen</h4>
-                  <div className="space-y-4">
+                {/* Timing Settings - Mobile Optimized */}
+                <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Timing Instellingen</h4>
+                  <div className="space-y-3 sm:space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Nieuwe Lead Bericht
@@ -418,7 +429,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                           ...config, 
                           timing: { ...config.timing, newLead: e.target.value as any }
                         })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       >
                         <option value="immediate">Direct</option>
                         <option value="1hour">Na 1 uur</option>
@@ -428,10 +439,53 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                   </div>
                 </div>
 
-                {/* Test Message */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Test Bericht</h4>
-                  <div className="space-y-4">
+                {/* Test Message - Mobile Optimized */}
+                <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Test Bericht</h4>
+                  
+                  {/* Message Type Toggle */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Bericht Type
+                    </label>
+                    <div className="flex space-x-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="messageType"
+                          checked={useFreeFormTest}
+                          onChange={() => setUseFreeFormTest(true)}
+                          className="mr-2 text-green-600 focus:ring-green-500"
+                        />
+                        <span className="text-sm text-gray-700">Free-form (Direct)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="messageType"
+                          checked={!useFreeFormTest}
+                          onChange={() => setUseFreeFormTest(false)}
+                          className="mr-2 text-green-600 focus:ring-green-500"
+                        />
+                        <span className="text-sm text-gray-700">Template</span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {useFreeFormTest 
+                        ? '⚠️ Direct tekst bericht - werkt ALLEEN binnen 24u na klant bericht!' 
+                        : '✅ Gebruikt WhatsApp template (altijd werkend)'}
+                    </p>
+                    {useFreeFormTest && (
+                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-xs text-yellow-800">
+                          <strong>Let op:</strong> Free-form berichten werken alleen binnen 24 uur nadat de klant jou een bericht heeft gestuurd. 
+                          Voor nieuwe gesprekken moet je template berichten gebruiken.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-3 sm:space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Test Telefoonnummer
@@ -441,7 +495,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                         value={testPhone}
                         onChange={(e) => setTestPhone(e.target.value)}
                         placeholder="+31 6 12345678"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
                     <div>
@@ -452,54 +506,57 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
                         value={testMessage}
                         onChange={(e) => setTestMessage(e.target.value)}
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        placeholder="Test bericht..."
+                        className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                        placeholder={useFreeFormTest 
+                          ? "Hallo! Dit is een test bericht van WarmeLeads. Hoe gaat het met je?" 
+                          : "Test bericht (gebruikt goedgekeurde template)..."
+                        }
                       />
                     </div>
                     <button
                       onClick={sendTestMessage}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                      className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base"
                     >
                       📤 Verstuur Test Bericht
                     </button>
                   </div>
                 </div>
 
-                {/* Usage Stats */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Gebruik Statistieken</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Usage Stats - Mobile Optimized */}
+                <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Gebruik Statistieken</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{config.usage.messagesSent}</div>
-                      <div className="text-sm text-gray-600">Verzonden</div>
+                      <div className="text-xl sm:text-2xl font-bold text-green-600">{config.usage.messagesSent}</div>
+                      <div className="text-xs sm:text-sm text-gray-600">Verzonden</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{config.usage.messagesDelivered}</div>
-                      <div className="text-sm text-gray-600">Bezorgd</div>
+                      <div className="text-xl sm:text-2xl font-bold text-blue-600">{config.usage.messagesDelivered}</div>
+                      <div className="text-xs sm:text-sm text-gray-600">Bezorgd</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-purple-600">{config.usage.messagesRead}</div>
-                      <div className="text-sm text-gray-600">Gelezen</div>
+                      <div className="text-xl sm:text-2xl font-bold text-purple-600">{config.usage.messagesRead}</div>
+                      <div className="text-xs sm:text-sm text-gray-600">Gelezen</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-red-600">{config.usage.messagesFailed}</div>
-                      <div className="text-sm text-gray-600">Mislukt</div>
+                      <div className="text-xl sm:text-2xl font-bold text-red-600">{config.usage.messagesFailed}</div>
+                      <div className="text-xs sm:text-sm text-gray-600">Mislukt</div>
                     </div>
                   </div>
                 </div>
 
-                {/* Save Button */}
-                <div className="flex justify-end space-x-3">
+                {/* Save Button - Mobile Optimized */}
+                <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
                   <button
                     onClick={onClose}
-                    className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
+                    className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors text-sm sm:text-base"
                   >
                     Annuleren
                   </button>
                   <button
                     onClick={saveConfig}
                     disabled={isSaving}
-                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 text-sm sm:text-base"
                   >
                     {isSaving ? 'Opslaan...' : 'Opslaan'}
                   </button>

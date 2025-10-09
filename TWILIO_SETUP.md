@@ -62,3 +62,5 @@ https://www.warmeleads.eu/api/whatsapp/webhook
 - **Send Message:** `POST /api/whatsapp/send`
 - **Webhook:** `POST /api/whatsapp/webhook`
 - **Health Check:** `GET /api/whatsapp/webhook`
+
+

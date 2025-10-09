@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readCustomerLeads } from '@/lib/googleSheetsAPI';
+import { WhatsAppConfig } from '@/lib/whatsappAPI';
 
 // Deze API route wordt aangeroepen door een Vercel Cron Job
 // om periodiek te checken op nieuwe leads en email notificaties te versturen
@@ -117,6 +118,23 @@ export async function GET(request: NextRequest) {
           
           let emailsSent = 0;
           let emailsFailed = 0;
+          let whatsappSent = 0;
+          let whatsappFailed = 0;
+          
+          // Check WhatsApp config for this customer
+          let whatsappConfig: WhatsAppConfig | null = null;
+          try {
+            const whatsappResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.warmeleads.eu'}/api/whatsapp/config?customerId=${customer.email}`);
+            if (whatsappResponse.ok) {
+              const whatsappData = await whatsappResponse.json();
+              whatsappConfig = whatsappData.config;
+              console.log(`📱 WhatsApp config loaded for ${customer.email}: enabled=${whatsappConfig?.enabled}`);
+            } else {
+              console.log(`📱 No WhatsApp config found for ${customer.email}`);
+            }
+          } catch (error) {
+            console.log(`📱 Error loading WhatsApp config for ${customer.email}:`, error);
+          }
           
           // Voeg nieuwe leads toe aan CRM en verstuur aparte email per lead
           for (const leadData of newLeads) {
@@ -178,6 +196,41 @@ export async function GET(request: NextRequest) {
                 console.error(`❌ Failed to send email for lead ${leadData.name}:`, emailError);
               }
             }
+            
+            // Send WhatsApp message if enabled and phone number available
+            if (whatsappConfig?.enabled && leadData.phone && leadData.phone.trim() !== '') {
+              try {
+                console.log(`📱 Sending WhatsApp message to ${leadData.phone} for lead: ${leadData.name}`);
+                
+                const whatsappResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.warmeleads.eu'}/api/whatsapp/send`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    customerId: customer.email,
+                    leadId: `sheet_${leadData.sheetRowNumber}`,
+                    phoneNumber: leadData.phone,
+                    message: whatsappConfig.templates.newLead,
+                    template: 'newLead',
+                    leadName: leadData.name,
+                    product: leadData.interest || 'Onze diensten'
+                  })
+                });
+                
+                if (whatsappResponse.ok) {
+                  whatsappSent++;
+                  console.log(`✅ WhatsApp message sent to ${leadData.phone} for lead: ${leadData.name}`);
+                } else {
+                  whatsappFailed++;
+                  const errorData = await whatsappResponse.json().catch(() => ({ error: 'Unknown error' }));
+                  console.error(`❌ Failed to send WhatsApp message to ${leadData.phone} for lead ${leadData.name}:`, errorData.error);
+                }
+              } catch (whatsappError) {
+                whatsappFailed++;
+                console.error(`❌ Error sending WhatsApp message to ${leadData.phone} for lead ${leadData.name}:`, whatsappError);
+              }
+            } else if (whatsappConfig?.enabled && (!leadData.phone || leadData.phone.trim() === '')) {
+              console.log(`📱 WhatsApp enabled but no phone number for lead: ${leadData.name}`);
+            }
           }
           
           // Update lastNotificationSent en sla customer data op in Blob Storage
@@ -207,14 +260,16 @@ export async function GET(request: NextRequest) {
             console.error(`❌ Error saving customer data to Blob Storage:`, saveError);
           }
           
-          console.log(`✅ Processed ${newLeads.length} leads for ${customer.email}: ${emailsSent} emails sent, ${emailsFailed} failed`);
+          console.log(`✅ Processed ${newLeads.length} leads for ${customer.email}: ${emailsSent} emails sent, ${emailsFailed} failed, ${whatsappSent} WhatsApp messages sent, ${whatsappFailed} WhatsApp failed`);
           
           results.push({
             customerId: customer.id,
             customerEmail: customer.email,
             newLeadsCount: newLeads.length,
             emailsSent,
-            emailsFailed
+            emailsFailed,
+            whatsappSent,
+            whatsappFailed
           });
         } else {
           console.log(`ℹ️ No new leads for ${customer.email} - all sheet leads already exist in CRM`);
@@ -229,12 +284,23 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    const totalEmailsSent = results.reduce((sum, r) => sum + (r.emailsSent || 0), 0);
+    const totalEmailsFailed = results.reduce((sum, r) => sum + (r.emailsFailed || 0), 0);
+    const totalWhatsappSent = results.reduce((sum, r) => sum + (r.whatsappSent || 0), 0);
+    const totalWhatsappFailed = results.reduce((sum, r) => sum + (r.whatsappFailed || 0), 0);
+    
     console.log(`✅ Cron job completed. Processed ${customers.length} customers, found new leads for ${results.filter(r => r.newLeadsCount).length}`);
+    console.log(`📧 Total emails: ${totalEmailsSent} sent, ${totalEmailsFailed} failed`);
+    console.log(`📱 Total WhatsApp: ${totalWhatsappSent} sent, ${totalWhatsappFailed} failed`);
     
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
       customersChecked: customers.length,
+      totalEmailsSent,
+      totalEmailsFailed,
+      totalWhatsappSent,
+      totalWhatsappFailed,
       results
     });
   } catch (error) {

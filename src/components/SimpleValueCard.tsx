@@ -74,3 +74,5 @@ export function SimpleValueCard({ onStartROIChat }: SimpleValueCardProps) {
     </motion.div>
   );
 }
+
+

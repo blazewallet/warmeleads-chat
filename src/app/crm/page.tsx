@@ -15,6 +15,7 @@ import {
 import { useAuthStore } from '@/lib/auth';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { branchIntelligence, type BranchAnalytics } from '@/lib/branchIntelligence';
+import { WhatsAppAnalytics } from '@/components/WhatsAppAnalytics';
 
 export default function CRMDashboard() {
   const router = useRouter();
@@ -176,118 +177,123 @@ export default function CRMDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-      {/* Header */}
+      {/* Header - Mobile Optimized */}
       <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white">CRM Dashboard</h1>
-              <p className="text-white/70 mt-2">Overzicht van je leads en prestaties</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+            <div className="text-center sm:text-left">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">CRM Dashboard</h1>
+              <p className="text-white/70 mt-1 sm:mt-2 text-sm sm:text-base">Overzicht van je leads en prestaties</p>
             </div>
-            <div className="flex items-center space-x-4">
+            
+            {/* Mobile Navigation Grid */}
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:space-x-4">
               <button
                 onClick={() => router.push('/crm/leads')}
-                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                className="bg-white/20 hover:bg-white/30 text-white px-3 py-2 sm:px-6 sm:py-3 rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center space-y-1 sm:space-y-0 sm:space-x-2 text-xs sm:text-sm"
               >
-                <UserGroupIcon className="w-5 h-5" />
-                <span>Mijn Leads</span>
+                <UserGroupIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Mijn Leads</span>
+                <span className="sm:hidden">Leads</span>
               </button>
               <button
                 onClick={() => router.push('/crm/analytics')}
-                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                className="bg-white/20 hover:bg-white/30 text-white px-3 py-2 sm:px-6 sm:py-3 rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center space-y-1 sm:space-y-0 sm:space-x-2 text-xs sm:text-sm"
               >
-                <ChartBarIcon className="w-5 h-5" />
-                <span>Analytics</span>
+                <ChartBarIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Analytics</span>
+                <span className="sm:hidden">Stats</span>
               </button>
               <button
                 onClick={() => router.push('/crm/settings')}
-                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                className="bg-white/20 hover:bg-white/30 text-white px-3 py-2 sm:px-6 sm:py-3 rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center space-y-1 sm:space-y-0 sm:space-x-2 text-xs sm:text-sm"
               >
-                <CogIcon className="w-5 h-5" />
-                <span>Instellingen</span>
+                <CogIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Instellingen</span>
+                <span className="sm:hidden">Setup</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        {/* Stats Overview */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        {/* Stats Overview - Mobile Optimized */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12"
+          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12"
         >
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                <UserGroupIcon className="w-6 h-6 text-blue-400" />
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6">
+            <div className="flex items-center justify-between mb-2 sm:mb-4">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-blue-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <UserGroupIcon className="w-4 h-4 sm:w-6 sm:h-6 text-blue-400" />
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">{stats.total}</div>
+                <div className="text-lg sm:text-2xl font-bold text-white">{stats.total}</div>
                 <div className="text-xs text-white/60">Totaal Leads</div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
-                <ArrowUpIcon className="w-6 h-6 text-green-400" />
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6">
+            <div className="flex items-center justify-between mb-2 sm:mb-4">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-green-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <ArrowUpIcon className="w-4 h-4 sm:w-6 sm:h-6 text-green-400" />
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">{stats.converted}</div>
+                <div className="text-lg sm:text-2xl font-bold text-white">{stats.converted}</div>
                 <div className="text-xs text-white/60">Geconverteerd</div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                <ChartBarIcon className="w-6 h-6 text-purple-400" />
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6">
+            <div className="flex items-center justify-between mb-2 sm:mb-4">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-purple-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <ChartBarIcon className="w-4 h-4 sm:w-6 sm:h-6 text-purple-400" />
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">{stats.conversionRate.toFixed(1)}%</div>
+                <div className="text-lg sm:text-2xl font-bold text-white">{stats.conversionRate.toFixed(1)}%</div>
                 <div className="text-xs text-white/60">Conversie Rate</div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
-                <ClockIcon className="w-6 h-6 text-orange-400" />
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6">
+            <div className="flex items-center justify-between mb-2 sm:mb-4">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-orange-500/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <ClockIcon className="w-4 h-4 sm:w-6 sm:h-6 text-orange-400" />
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">{stats.new}</div>
+                <div className="text-lg sm:text-2xl font-bold text-white">{stats.new}</div>
                 <div className="text-xs text-white/60">Nieuwe Leads</div>
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Branch Analytics */}
+        {/* Branch Analytics - Mobile Optimized */}
         {branchAnalytics.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-8"
+            className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-6 sm:mb-8"
           >
-            <h2 className="text-2xl font-bold text-white mb-6">Branch Prestaties</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">Branch Prestaties</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
               {branchAnalytics.slice(0, 6).map((analytics, index) => (
                 <motion.div
                   key={analytics.branch}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.3 + index * 0.1 }}
-                  className="bg-white/5 rounded-xl p-4 border border-white/10"
+                  className="bg-white/5 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-white/10"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-white text-sm">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="font-semibold text-white text-xs sm:text-sm">
                       {analytics.branch === 'Thuisbatterijen' && '🔋'}
                       {analytics.branch === 'Financial Lease' && '🚗'}
                       {analytics.branch === 'Warmtepompen' && '🔥'}
@@ -299,7 +305,7 @@ export default function CRMDashboard() {
                       {analytics.conversionRate.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="space-y-2 text-xs text-white/70">
+                  <div className="space-y-1 sm:space-y-2 text-xs text-white/70">
                     <div className="flex justify-between">
                       <span>Leads:</span>
                       <span className="text-white">{analytics.totalLeads}</span>
@@ -319,58 +325,70 @@ export default function CRMDashboard() {
           </motion.div>
         )}
 
-        {/* Quick Actions */}
+        {/* WhatsApp Analytics */}
+        {user?.email && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="mb-6 sm:mb-8"
+          >
+            <WhatsAppAnalytics customerId={user.email} />
+          </motion.div>
+        )}
+
+        {/* Quick Actions - Mobile Optimized */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
         >
           <button
             onClick={() => router.push('/crm/leads')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-2xl p-6 transition-all group"
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all group"
           >
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
-                <UserGroupIcon className="w-6 h-6 text-blue-400" />
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/20 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
+                <UserGroupIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
               </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-white">Leads Beheren</h3>
-                <p className="text-sm text-white/70">Bekijk en beheer al je leads</p>
+              <div className="text-left flex-1">
+                <h3 className="font-semibold text-white text-sm sm:text-base">Leads Beheren</h3>
+                <p className="text-xs sm:text-sm text-white/70">Bekijk en beheer al je leads</p>
               </div>
-              <ArrowRightIcon className="w-5 h-5 text-white/50 ml-auto" />
+              <ArrowRightIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white/50" />
             </div>
           </button>
 
           <button
             onClick={() => router.push('/crm/analytics')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-2xl p-6 transition-all group"
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all group"
           >
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
-                <ChartBarIcon className="w-6 h-6 text-purple-400" />
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-500/20 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
+                <ChartBarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
               </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-white">Analytics</h3>
-                <p className="text-sm text-white/70">Diepgaande inzichten en rapporten</p>
+              <div className="text-left flex-1">
+                <h3 className="font-semibold text-white text-sm sm:text-base">Analytics</h3>
+                <p className="text-xs sm:text-sm text-white/70">Diepgaande inzichten en rapporten</p>
               </div>
-              <ArrowRightIcon className="w-5 h-5 text-white/50 ml-auto" />
+              <ArrowRightIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white/50" />
             </div>
           </button>
 
           <button
             onClick={() => router.push('/crm/settings')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-2xl p-6 transition-all group"
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all group sm:col-span-2 lg:col-span-1"
           >
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
-                <CogIcon className="w-6 h-6 text-orange-400" />
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-500/20 rounded-lg sm:rounded-xl flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
+                <CogIcon className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400" />
               </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-white">Instellingen</h3>
-                <p className="text-sm text-white/70">Configureer je CRM voorkeuren</p>
+              <div className="text-left flex-1">
+                <h3 className="font-semibold text-white text-sm sm:text-base">Instellingen</h3>
+                <p className="text-xs sm:text-sm text-white/70">Configureer je CRM voorkeuren</p>
               </div>
-              <ArrowRightIcon className="w-5 h-5 text-white/50 ml-auto" />
+              <ArrowRightIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white/50" />
             </div>
           </button>
         </motion.div>

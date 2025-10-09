@@ -115,3 +115,5 @@ function getBrancheEmoji(branche: string): string {
   };
   return emojis[branche] || '📝';
 }
+
+

@@ -19,12 +19,48 @@ export async function POST(request: NextRequest) {
       message, 
       template,
       leadName,
-      product
+      product,
+      useFreeFormParam = false // New parameter to enable free-form messages
     } = await request.json();
 
+    // SECURITY: Force template messages for automatic lead messages
+    // Only allow free-form for manual test messages
+    const isAutomaticMessage = leadId && leadId.startsWith('sheet_');
+    const forceTemplate = isAutomaticMessage && useFreeFormParam;
+    
+    let useFreeForm = useFreeFormParam;
+    if (forceTemplate) {
+      console.log(`🔒 SECURITY: Forcing template message for automatic lead message (leadId: ${leadId})`);
+      useFreeForm = false;
+    }
+
+    // Input validation
     if (!customerId || !phoneNumber || !message) {
       return NextResponse.json({ 
         error: 'Customer ID, phone number, and message are required' 
+      }, { status: 400 });
+    }
+
+    // Validate customerId format (email)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(customerId)) {
+      return NextResponse.json({ 
+        error: 'Invalid customer ID format' 
+      }, { status: 400 });
+    }
+
+    // Validate phoneNumber format (basic check)
+    const cleanedPhone = phoneNumber.replace(/[\s\-\+]/g, '');
+    if (cleanedPhone.length < 9 || cleanedPhone.length > 15) {
+      return NextResponse.json({ 
+        error: 'Invalid phone number format' 
+      }, { status: 400 });
+    }
+
+    // Validate message length
+    if (message.trim().length === 0 || message.length > 1600) {
+      return NextResponse.json({ 
+        error: 'Message must be between 1 and 1600 characters' 
       }, { status: 400 });
     }
 
@@ -87,36 +123,69 @@ export async function POST(request: NextRequest) {
     }
     
     // Format phone number for Twilio (whatsapp:+31...)
-    const formattedPhone = phoneNumber.startsWith('whatsapp:') 
-      ? phoneNumber 
-      : `whatsapp:${phoneNumber.replace(/^\+/, '').replace(/\s/g, '')}`;
+    // Handle various Dutch phone number formats:
+    // - 0612345678 -> +31612345678
+    // - 31612345678 -> +31612345678
+    // - +31612345678 -> +31612345678
+    let cleanPhone = phoneNumber.replace(/\s/g, '').replace(/-/g, ''); // Remove spaces and dashes
     
+    // If it starts with 'whatsapp:', extract the number part
+    if (cleanPhone.startsWith('whatsapp:')) {
+      cleanPhone = cleanPhone.replace('whatsapp:', '');
+    }
+    
+    // Remove leading + if present
+    cleanPhone = cleanPhone.replace(/^\+/, '');
+    
+    // Convert Dutch mobile numbers starting with 06 to international format
+    if (cleanPhone.startsWith('06')) {
+      cleanPhone = '31' + cleanPhone.substring(1); // 0612345678 -> 31612345678
+    }
+    
+    // Ensure it starts with 31 for Dutch numbers
+    if (!cleanPhone.startsWith('31') && cleanPhone.length >= 9) {
+      cleanPhone = '31' + cleanPhone;
+    }
+    
+    // Add + prefix and whatsapp: prefix
+    const formattedPhone = `whatsapp:+${cleanPhone}`;
+    
+    console.log(`📞 Original phone: ${phoneNumber}`);
     console.log(`📞 Formatted phone: ${formattedPhone}`);
     
     // Create Twilio API URL
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
     console.log(`🌐 Twilio API URL: ${twilioUrl}`);
     
-    // Check if this is a test message (custom message) or a real lead
-    const isTestMessage = message && message !== config.templates.newLead;
-    
+    // Choose between template and free-form messages
     let requestBody;
     
-    if (isTestMessage) {
-      // For test messages, use direct messaging with custom content
+    if (useFreeForm) {
+      // FREE-FORM MESSAGE - Direct text message without template
+      // NOTE: Free-form messages only work within 24-hour conversation window
+      console.log(`📝 Using FREE-FORM message (direct text)`);
+      console.log(`⚠️ WARNING: Free-form messages only work within 24-hour conversation window!`);
+      
       requestBody = new URLSearchParams({
+        To: formattedPhone,
+        MessagingServiceSid: twilioMessagingServiceSid,
+        Body: processedMessage // Direct message content
+      });
+      
+      console.log(`📝 Request body (FREE-FORM):`, {
         To: formattedPhone,
         MessagingServiceSid: twilioMessagingServiceSid,
         Body: processedMessage
       });
     } else {
-      // For real leads, use Twilio ContentSid template (QuickPulse style)
-      const defaultContentSid = twilioContentSid || 'HX1234567890abcdef1234567890abcdef';
+      // TEMPLATE MESSAGE - Use ContentSid (QuickPulse style)
+      console.log(`📝 Using TEMPLATE message (ContentSid)`);
+      const defaultContentSid = twilioContentSid || 'HX1234567890abcdef1234567890abcdef'; // Default template
       
-      // Prepare placeholders for Twilio template
+      // Prepare placeholders for Twilio template (exact QuickPulse style)
       const placeholders = {
-        "1": leadName || "Test Lead",
-        "2": config.businessName || "Thuisbatterij Deals"
+        "1": leadName || "Lead",
+        "2": config.businessName || "WarmeLeads"
       };
       
       requestBody = new URLSearchParams({
@@ -125,21 +194,14 @@ export async function POST(request: NextRequest) {
         ContentSid: defaultContentSid,
         ContentVariables: JSON.stringify(placeholders)
       });
+      
+      console.log(`📝 Request body (TEMPLATE):`, {
+        To: formattedPhone,
+        MessagingServiceSid: twilioMessagingServiceSid,
+        ContentSid: defaultContentSid,
+        ContentVariables: JSON.stringify(placeholders)
+      });
     }
-    
-    console.log(`📝 Request body (${isTestMessage ? 'TEST MESSAGE' : 'QUICKPULSE STYLE'}):`, {
-      To: formattedPhone,
-      MessagingServiceSid: twilioMessagingServiceSid,
-      ...(isTestMessage ? {
-        Body: processedMessage.substring(0, 100) + '...'
-      } : {
-        ContentSid: twilioContentSid || 'HX1234567890abcdef1234567890abcdef',
-        ContentVariables: JSON.stringify({
-          "1": leadName || "Test Lead",
-          "2": config.businessName || "Thuisbatterij Deals"
-        })
-      })
-    });
     
     // Send message via Twilio WhatsApp API (QuickPulse style)
     const twilioResponse = await fetch(twilioUrl, {
@@ -166,9 +228,25 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Twilio WhatsApp message sent successfully (QuickPulse style): ${result.messageId}`);
     } else {
       console.error('❌ Twilio WhatsApp API error:', twilioData);
+      
+      // Handle specific WhatsApp errors
+      let errorMessage = twilioData.message || 'Failed to send WhatsApp message via Twilio';
+      
+      if (twilioData.code === 63007) {
+        errorMessage = 'Free-form messages can only be sent within 24 hours of the last customer message. Use template messages for new conversations.';
+      } else if (twilioData.code === 63016) {
+        errorMessage = 'WhatsApp message template not found or not approved.';
+      } else if (twilioData.code === 63017) {
+        errorMessage = 'WhatsApp message template variables are invalid.';
+      } else if (twilioData.code === 63018) {
+        errorMessage = 'WhatsApp message template is not approved for this use case.';
+      }
+      
       result = {
         success: false,
-        error: twilioData.message || 'Failed to send WhatsApp message via Twilio'
+        error: errorMessage,
+        code: twilioData.code,
+        details: twilioData
       };
     }
 
@@ -186,6 +264,7 @@ export async function POST(request: NextRequest) {
         template: template || 'newLead',
         status: 'sent',
         sentAt: new Date().toISOString(),
+        timestamp: new Date().toISOString(), // For analytics compatibility
         type: 'template',
         templateName: template || 'newLead',
         direction: 'outgoing',

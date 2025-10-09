@@ -122,18 +122,7 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
   const { user, isAuthenticated, logout } = useAuthStore();
   const router = useRouter();
   
-  // Debug auth state
-  useEffect(() => {
-    console.log('🔍 CustomerPortal auth debug:', {
-      user: user,
-      isAuthenticated: isAuthenticated,
-      userEmail: user?.email,
-      userName: user?.name,
-      isGuest: user?.isGuest,
-      hasCustomerData: !!customerData,
-      customerHasAccount: customerData?.hasAccount
-    });
-  }, [user, isAuthenticated, customerData]);
+  // Note: Debug logging removed for production
 
   // Load customer data from CRM
   useEffect(() => {
@@ -148,11 +137,11 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
   const recentOrders = getRecentOrders(user);
 
   const handleLogout = () => {
-    console.log('Logout knop geklikt');
     logout();
-    console.log('Logout functie uitgevoerd');
-    // Direct navigate to home after logout
-    onBackToHome();
+    // Navigate to home after logout using router.push
+    setTimeout(() => {
+      router.push('/');
+    }, 100);
   };
 
   const handleQuickAction = (action: string) => {
