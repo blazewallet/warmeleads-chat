@@ -16,7 +16,7 @@ export class GoogleSheetsService {
   private apiKey: string;
   
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY;
+    this.apiKey = apiKey || process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY || '';
     
     if (!this.apiKey) {
       console.warn('⚠️ Google Sheets API key not configured. Set NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY environment variable.');
