@@ -122,7 +122,16 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
   const { user, isAuthenticated, logout } = useAuthStore();
   const router = useRouter();
   
-  // Note: Debug logging removed for production
+  // Debug logging to track auth state changes
+  useEffect(() => {
+    console.log('CustomerPortal auth debug:', { 
+      user: user ? { email: user.email, name: user.name } : null, 
+      isAuthenticated, 
+      userEmail: user?.email, 
+      userName: user?.name,
+      isGuest: user?.isGuest 
+    });
+  }, [user, isAuthenticated]);
 
   // Load customer data from CRM
   useEffect(() => {

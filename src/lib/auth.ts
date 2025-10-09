@@ -241,6 +241,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        console.log('🚨 LOGOUT AANGEROEPEN - Stack trace:', new Error().stack);
         set({ 
           user: null, 
           isAuthenticated: false, 
