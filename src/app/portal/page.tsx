@@ -11,6 +11,7 @@ export default function PortalPage() {
 
   const handleBackToHome = () => {
     // Navigate to homepage WITHOUT logging out - user stays logged in
+    console.log('🏠 Portal: Navigating to home, user should stay logged in');
     router.push('/');
   };
 

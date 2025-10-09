@@ -24,6 +24,12 @@ export default function HomePage() {
   useEffect(() => {
     setIsLoaded(true);
     
+    console.log('🏠 Homepage: Loaded, auth state:', { 
+      isAuthenticated, 
+      userEmail: user?.email,
+      isLoading: false 
+    });
+    
     // Check for URL parameters to set chat context
     const urlParams = new URLSearchParams(window.location.search);
     const chatParam = urlParams.get('chat');
@@ -33,7 +39,7 @@ export default function HomePage() {
       ChatContextManager.setContext('roi');
       setCurrentPage('chat');
     }
-  }, []);
+  }, [isAuthenticated, user]);
 
   // Note: Removed auto-redirect to portal - users should be able to visit homepage while logged in
 

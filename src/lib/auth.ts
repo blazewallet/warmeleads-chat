@@ -320,6 +320,11 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => (state) => {
         // Set loading to false after rehydration is complete
         if (state) {
+          console.log('🔄 Auth store rehydrated:', { 
+            isAuthenticated: state.isAuthenticated, 
+            userEmail: state.user?.email,
+            isLoading: state.isLoading 
+          });
           state.isLoading = false;
         }
       },
