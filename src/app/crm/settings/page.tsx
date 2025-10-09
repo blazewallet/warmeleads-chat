@@ -83,10 +83,15 @@ export default function CRMSettingsPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated && user) {
+    // Wait for auth to finish loading before checking
+    if (authLoading) return;
+    
+    if (isAuthenticated && user) {
       loadCRMData();
+    } else {
+      router.push('/');
     }
-  }, [authLoading, isAuthenticated, user]);
+  }, [authLoading, isAuthenticated, user, router]);
 
   // Save Google Sheet URL
   const handleSaveGoogleSheetUrl = async () => {

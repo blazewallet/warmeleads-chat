@@ -130,7 +130,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true, // Start with loading true to prevent race conditions
       error: null,
 
       login: async (email: string, password: string) => {
@@ -317,8 +317,12 @@ export const useAuthStore = create<AuthState>()(
         user: state.user, 
         isAuthenticated: state.isAuthenticated 
       }),
-      // Auth state rehydration callback removed for production
-      // Better mobile compatibility
+      onRehydrateStorage: () => (state) => {
+        // Set loading to false after rehydration is complete
+        if (state) {
+          state.isLoading = false;
+        }
+      },
       storage: {
         getItem: (name) => {
           try {

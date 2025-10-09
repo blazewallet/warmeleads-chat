@@ -105,25 +105,22 @@ export default function CustomerLeadsPage() {
 
   // Direct localStorage auth check - improved for mobile
   useEffect(() => {
+    // Wait for auth to finish loading before checking
+    if (authLoading) return;
+    
     const checkAuth = () => {
       try {
         // Check localStorage directly for auth data
         const authStore = localStorage.getItem('warmeleads-auth-store');
         const adminToken = localStorage.getItem('warmeleads_admin_token');
         
-        console.log('🔍 Direct auth check:', {
-          hasAuthStore: !!authStore,
-          hasAdminToken: !!adminToken,
-          authStoreData: authStore ? 'exists' : 'missing',
-          zustandState: { authLoading, isAuthenticated, userEmail: user?.email }
-        });
+        // Auth check for CRM Leads page
         
         let hasValidAuth = false;
         
         // Check admin token
         if (adminToken === 'admin_authenticated') {
           hasValidAuth = true;
-          console.log('✅ Admin authenticated via token');
         }
         
         // Check auth store
@@ -132,36 +129,28 @@ export default function CustomerLeadsPage() {
             const parsed = JSON.parse(authStore);
             if (parsed.state?.isAuthenticated && parsed.state?.user?.email) {
               hasValidAuth = true;
-              console.log('✅ User authenticated via auth store:', parsed.state.user.email);
             }
           } catch (e) {
-            console.log('❌ Error parsing auth store');
+            // Error parsing auth store
           }
         }
         
         // Also check Zustand state directly (for mobile compatibility)
         if (isAuthenticated && user?.email) {
           hasValidAuth = true;
-          console.log('✅ User authenticated via Zustand state:', user.email);
         }
         
         if (!hasValidAuth) {
-          console.log('🚨 No valid auth found, redirecting to home');
-          // Use replace instead of push to prevent back button issues on mobile
           router.replace('/');
         } else {
-          console.log('✅ Valid auth found, staying on leads page');
+          loadCustomerData();
         }
       } catch (error) {
-        console.error('❌ Error during auth check:', error);
-        // On error, redirect to home
         router.replace('/');
       }
     };
     
-    // Longer delay for mobile devices to ensure localStorage is ready
-    const timer = setTimeout(checkAuth, 500);
-    return () => clearTimeout(timer);
+    checkAuth();
   }, [router, authLoading, isAuthenticated, user]);
 
   // Load customer data with Google Sheets sync

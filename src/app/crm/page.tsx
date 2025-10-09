@@ -27,15 +27,16 @@ export default function CRMDashboard() {
   const [branchAnalytics, setBranchAnalytics] = useState<BranchAnalytics[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Auth check
+  // Auth check - improved to prevent race conditions
   useEffect(() => {
+    // Wait for auth to finish loading before checking
     if (authLoading) return;
     
+    // Only redirect if we're sure the user is not authenticated
     if (!isAuthenticated || !user?.email) {
       router.push('/');
       return;
     }
-    
     loadCRMData();
   }, [isAuthenticated, user, authLoading, router]);
 
