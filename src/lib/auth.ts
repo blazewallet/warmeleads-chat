@@ -126,14 +126,34 @@ const mockUsers: User[] = [
 ];
 let nextUserId = 4;
 
+// Simple auth store without complex state management
+let authState = {
+  user: null as User | null,
+  isAuthenticated: false,
+  isLoading: false,
+  error: null as string | null,
+};
+
+// Listeners for state changes
+const listeners = new Set<() => void>();
+
+const notifyListeners = () => {
+  listeners.forEach(listener => listener());
+};
+
 export const useAuthStore = create<AuthState>()(
   (set, get) => ({
-    user: null,
-    isAuthenticated: false,
-    isLoading: false,
-    error: null,
+    user: authState.user,
+    isAuthenticated: authState.isAuthenticated,
+    isLoading: authState.isLoading,
+    error: authState.error,
 
     login: async (email: string, password: string) => {
+      console.log('🔐 LOGIN ATTEMPT:', { email });
+      
+      // Update local state
+      authState.isLoading = true;
+      authState.error = null;
       set({ isLoading: true, error: null });
       
       try {
@@ -164,6 +184,12 @@ export const useAuthStore = create<AuthState>()(
         
         console.log('🔐 LOGIN SUCCESS:', { email, isAuthenticated: true });
         
+        // Update local state
+        authState.user = user;
+        authState.isAuthenticated = true;
+        authState.isLoading = false;
+        authState.error = null;
+        
         set({ 
           user, 
           isAuthenticated: true, 
@@ -178,9 +204,17 @@ export const useAuthStore = create<AuthState>()(
           timestamp: Date.now()
         }));
         
+        notifyListeners();
+        
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Login mislukt';
+        
+        // Update local state
+        authState.error = errorMessage;
+        authState.isLoading = false;
+        
         set({ 
-          error: error instanceof Error ? error.message : 'Login mislukt', 
+          error: errorMessage, 
           isLoading: false 
         });
       }
@@ -250,7 +284,15 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        console.log('🚨 EXPLICIT LOGOUT - Stack trace:', new Error().stack);
+        console.log('🚨 EXPLICIT LOGOUT CALLED - Stack trace:', new Error().stack);
+        console.log('🚨 Current state before logout:', authState);
+        
+        // Update local state
+        authState.user = null;
+        authState.isAuthenticated = false;
+        authState.isLoading = false;
+        authState.error = null;
+        
         set({ 
           user: null, 
           isAuthenticated: false, 
@@ -261,6 +303,9 @@ export const useAuthStore = create<AuthState>()(
         // Clear all auth data
         localStorage.removeItem('warmeleads-auth');
         localStorage.removeItem('warmeleads_visited');
+        
+        console.log('🚨 State after logout:', authState);
+        notifyListeners();
       },
 
       updateProfile: (updates: Partial<User>) => {
@@ -334,12 +379,21 @@ export const useAuthStore = create<AuthState>()(
                 email: parsed.user?.email, 
                 isAuthenticated: parsed.isAuthenticated 
               });
+              
+              // Update local state
+              authState.user = parsed.user;
+              authState.isAuthenticated = parsed.isAuthenticated;
+              authState.isLoading = false;
+              authState.error = null;
+              
               set({
                 user: parsed.user,
                 isAuthenticated: parsed.isAuthenticated,
                 isLoading: false,
                 error: null
               });
+              
+              notifyListeners();
             } else {
               console.log('🕐 AUTH DATA TOO OLD, CLEARING');
               localStorage.removeItem('warmeleads-auth');

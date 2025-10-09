@@ -133,6 +133,19 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
     });
   }, [user, isAuthenticated]);
 
+  // Track when logout function is called
+  useEffect(() => {
+    const originalLogout = logout;
+    const wrappedLogout = () => {
+      console.log('🚨 LOGOUT FUNCTION CALLED FROM CUSTOMERPORTAL');
+      console.log('🚨 Stack trace:', new Error().stack);
+      return originalLogout();
+    };
+    
+    // This is just for debugging - we can't actually wrap the function
+    // but we can log when the component re-renders
+  }, [logout]);
+
   // Load customer data from CRM
   useEffect(() => {
     if (user?.email) {
