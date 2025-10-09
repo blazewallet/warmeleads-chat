@@ -16,7 +16,11 @@ export class GoogleSheetsService {
   private apiKey: string;
   
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY || 'AIzaSyCVX7snfUde5LJRYBYFdPjpN3Dc6Kyf0p4';
+    this.apiKey = apiKey || process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY;
+    
+    if (!this.apiKey) {
+      console.warn('⚠️ Google Sheets API key not configured. Set NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY environment variable.');
+    }
   }
 
   // Read data from Google Sheets
@@ -46,10 +50,13 @@ export class GoogleSheetsService {
         console.error('Google Sheets API error:', {
           status: response.status,
           statusText: response.statusText,
-          error: errorText
+          error: errorText,
+          url: url.substring(0, 100) + '...' // Log partial URL for debugging
         });
         
-        if (response.status === 403) {
+        if (response.status === 400) {
+          throw new Error('Ongeldige API key of spreadsheet configuratie. Controleer de Google Sheets API key en spreadsheet toegang.');
+        } else if (response.status === 403) {
           throw new Error('Geen toegang tot spreadsheet. Zorg dat de sheet publiek toegankelijk is.');
         } else if (response.status === 404) {
           throw new Error('Spreadsheet niet gevonden. Controleer de URL.');
@@ -402,6 +409,12 @@ export const readCustomerLeads = async (spreadsheetUrl: string, apiKey?: string)
       }
     } catch (error) {
       console.log(`❌ Range ${range} failed:`, error instanceof Error ? error.message : 'Unknown error');
+      
+      // If it's a 400 error (API key issue), don't try other ranges
+      if (error instanceof Error && error.message.includes('400')) {
+        console.error('🚫 Google Sheets API key issue detected, stopping range attempts');
+        throw error;
+      }
       continue;
     }
   }

@@ -245,6 +245,12 @@ export default function CustomerLeadsPage() {
           }
         } catch (syncError) {
           console.error('❌ Leads Portal: Google Sheets sync failed:', syncError);
+          
+          // Show user-friendly error message for API key issues
+          if (syncError instanceof Error && syncError.message.includes('API key')) {
+            console.warn('⚠️ Google Sheets API key issue detected. Please check API configuration.');
+          }
+          
           // Continue with existing data if sync fails
         }
       }

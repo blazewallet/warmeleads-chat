@@ -20,9 +20,9 @@ export async function GET(request: NextRequest) {
     console.log('  Blob storage configured:', isBlobStorageConfigured());
     
     if (!isBlobStorageConfigured()) {
-      console.error('❌ Blob storage not configured');
+      console.error('❌ Blob storage not configured - missing BLOB_READ_WRITE_TOKEN');
       return NextResponse.json(
-        { error: 'Blob storage not configured' },
+        { error: 'Blob storage not configured. Please set BLOB_READ_WRITE_TOKEN environment variable.' },
         { status: 500 }
       );
     }
@@ -163,9 +163,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isBlobStorageConfigured()) {
-      console.error('❌ Blob storage not configured');
+      console.error('❌ Blob storage not configured - missing BLOB_READ_WRITE_TOKEN');
       return NextResponse.json(
-        { error: 'Blob storage not configured' },
+        { error: 'Blob storage not configured. Please set BLOB_READ_WRITE_TOKEN environment variable.' },
         { status: 500 }
       );
     }
@@ -278,7 +278,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!isBlobStorageConfigured()) {
       return NextResponse.json(
-        { error: 'Blob storage not configured' },
+        { error: 'Blob storage not configured. Please set BLOB_READ_WRITE_TOKEN environment variable.' },
         { status: 500 }
       );
     }

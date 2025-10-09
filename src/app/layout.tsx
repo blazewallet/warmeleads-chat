@@ -3,7 +3,13 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { StructuredData } from "@/components/StructuredData";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { logEnvironmentStatus } from "@/lib/environmentCheck";
 import "./globals.css";
+
+// Log environment status in development
+if (typeof window === 'undefined') {
+  logEnvironmentStatus();
+}
 
 const inter = Inter({ 
   subsets: ["latin"],

@@ -1,11 +1,3 @@
 {
-  "crons": [],
-  "domains": ["warmeleads.eu", "www.warmeleads.eu"],
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "destination": "https://warmeleads-chat-oml0e50f5-rick-schlimbacks-projects.vercel.app/$1",
-      "permanent": false
-    }
-  ]
+  "crons": []
 }
