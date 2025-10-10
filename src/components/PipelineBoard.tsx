@@ -24,7 +24,8 @@ import {
   SparklesIcon,
   UserIcon,
   ClockIcon,
-  FlagIcon
+  FlagIcon,
+  XCircleIcon
 } from '@heroicons/react/24/outline';
 import type { Lead } from '@/lib/crmSystem';
 import { branchIntelligence, type Branch } from '@/lib/branchIntelligence';
@@ -102,12 +103,28 @@ export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate,
         aiPrompt: `Onthul onderhandeling mogelijkheden voor ${branch}`
       },
       {
-        id: 'closed-won',
-        name: 'Gesloten',
+        id: 'converted',
+        name: 'Geconverteerd',
         order: 5,
         color: 'bg-green-500',
         icon: CheckCircleIcon,
         leads: leads.filter(lead => lead.status === 'converted')
+      },
+      {
+        id: 'geclosed',
+        name: 'Geclosed',
+        order: 6,
+        color: 'bg-emerald-500',
+        icon: CurrencyEuroIcon,
+        leads: leads.filter(lead => lead.status === 'geclosed')
+      },
+      {
+        id: 'lost',
+        name: 'Verloren',
+        order: 7,
+        color: 'bg-red-500',
+        icon: XCircleIcon,
+        leads: leads.filter(lead => lead.status === 'lost')
       }
     ];
 

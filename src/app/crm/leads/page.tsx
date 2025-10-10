@@ -495,7 +495,10 @@ export default function CustomerLeadsPage() {
       case 'new': return 'bg-blue-100 text-blue-800';
       case 'contacted': return 'bg-yellow-100 text-yellow-800';
       case 'qualified': return 'bg-purple-100 text-purple-800';
+      case 'proposal': return 'bg-indigo-100 text-indigo-800';
+      case 'negotiation': return 'bg-orange-100 text-orange-800';
       case 'converted': return 'bg-green-100 text-green-800';
+      case 'geclosed': return 'bg-emerald-100 text-emerald-800';
       case 'lost': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -506,7 +509,10 @@ export default function CustomerLeadsPage() {
       case 'new': return '🆕';
       case 'contacted': return '📞';
       case 'qualified': return '⭐';
+      case 'proposal': return '📄';
+      case 'negotiation': return '🤝';
       case 'converted': return '✅';
+      case 'geclosed': return '💰';
       case 'lost': return '❌';
       default: return '❓';
     }
@@ -1072,7 +1078,10 @@ export default function CustomerLeadsPage() {
                 <option value="new">🆕 Nieuw</option>
                 <option value="contacted">📞 Gecontacteerd</option>
                 <option value="qualified">⭐ Gekwalificeerd</option>
+                <option value="proposal">📄 Voorstel</option>
+                <option value="negotiation">🤝 Onderhandeling</option>
                 <option value="converted">✅ Geconverteerd</option>
+                <option value="geclosed">💰 Geclosed</option>
                 <option value="lost">❌ Verloren</option>
               </select>
               <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1543,7 +1552,10 @@ export default function CustomerLeadsPage() {
                           <option value="new">🆕 Nieuw</option>
                           <option value="contacted">📞 Gecontacteerd</option>
                           <option value="qualified">⭐ Gekwalificeerd</option>
+                          <option value="proposal">📄 Voorstel</option>
+                          <option value="negotiation">🤝 Onderhandeling</option>
                           <option value="converted">✅ Geconverteerd</option>
+                          <option value="geclosed">💰 Geclosed</option>
                           <option value="lost">❌ Verloren</option>
                         </select>
                         <div className="text-xs text-gray-500 mt-1">
@@ -2036,7 +2048,10 @@ export default function CustomerLeadsPage() {
                       <option value="new">🆕 Nieuw</option>
                       <option value="contacted">📞 Gecontacteerd</option>
                       <option value="qualified">⭐ Gekwalificeerd</option>
+                      <option value="proposal">📄 Voorstel</option>
+                      <option value="negotiation">🤝 Onderhandeling</option>
                       <option value="converted">✅ Geconverteerd</option>
+                      <option value="geclosed">💰 Geclosed</option>
                       <option value="lost">❌ Verloren</option>
                     </select>
                   </div>
