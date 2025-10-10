@@ -909,8 +909,23 @@ export default function CustomerLeadsPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content - Conditional container */}
+      {viewMode === 'pipeline' ? (
+        /* Pipeline view - Full width, no container */
+        <div className="h-[calc(100vh-120px)]">
+          <PipelineBoard 
+            leads={filteredLeads}
+            customerId={customerData?.id || user?.email || 'unknown'}
+            onLeadUpdate={handleUpdateLead}
+            onStagesChange={(stages) => {
+              setCustomStages(stages);
+              console.log('Pipeline stages updated:', stages);
+            }}
+          />
+        </div>
+      ) : (
+        /* List view - Normal container */
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
          {/* Statistics - Responsive Collapsible */}
          <motion.div
            initial={{ opacity: 0, y: 20 }}
@@ -1242,19 +1257,7 @@ export default function CustomerLeadsPage() {
           </motion.div>
         )}
 
-        {/* Conditional Rendering: Pipeline vs List View */}
-        {viewMode === 'pipeline' ? (
-          <PipelineBoard 
-            leads={filteredLeads}
-            customerId={customerData?.id || user?.email || 'unknown'}
-            onLeadUpdate={handleUpdateLead}
-            onStagesChange={(stages) => {
-              setCustomStages(stages);
-              console.log('Pipeline stages updated:', stages);
-            }}
-          />
-        ) : (
-          /* Leads Table */
+          {/* Leads Table */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1732,8 +1735,6 @@ export default function CustomerLeadsPage() {
             </div>
           )}
         </motion.div>
-        )} {/* End of conditional rendering list vs pipeline */}
-      </div>
 
       {/* Lead Detail Modal */}
       <AnimatePresence>
@@ -2483,6 +2484,8 @@ export default function CustomerLeadsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }
