@@ -133,6 +133,7 @@ export class GoogleSheetsService {
           timeline: this.getCellValue(row, headers, ['timeline', 'wanneer', 'termijn', 'planning']) || '',
           notes: notes,
           status: this.parseStatus(this.getCellValue(row, headers, ['status', 'staat', 'fase'])),
+          dealValue: this.parseDealValue(this.getCellValue(row, headers, ['deal waarde', 'dealvalue', 'waarde', 'omzet', 'revenue'])),
           assignedTo: this.getCellValue(row, headers, ['toegewezen', 'assigned', 'verkoper']) || '',
           createdAt: this.parseDate(this.getCellValue(row, headers, ['datum interesse klant', 'datum', 'date', 'created'])) || new Date(),
           updatedAt: new Date(),
@@ -211,9 +212,29 @@ export class GoogleSheetsService {
     if (status.includes('contact') || status.includes('gebeld')) return 'contacted';
     if (status.includes('gekwalificeerd') || status.includes('qualified') || status.includes('interesse')) return 'qualified';
     if (status.includes('geconverteerd') || status.includes('converted') || status.includes('verkocht') || status.includes('klant')) return 'converted';
+    if (status.includes('geclosed') || status.includes('gesloten') || status.includes('afgerond')) return 'geclosed';
     if (status.includes('verloren') || status.includes('lost') || status.includes('afgewezen')) return 'lost';
     
     return 'new'; // Default
+  }
+
+  // Helper: Parse deal value from sheet
+  private parseDealValue(valueText: string): number | undefined {
+    if (!valueText) return undefined;
+    
+    try {
+      // Remove currency symbols and spaces
+      const cleanValue = valueText.replace(/[€$£¥,\s]/g, '').replace(/\./g, '');
+      const value = parseFloat(cleanValue);
+      
+      if (!isNaN(value) && value > 0) {
+        return value;
+      }
+    } catch (error) {
+      console.error('Error parsing deal value:', valueText, error);
+    }
+    
+    return undefined;
   }
 
   // Helper: Parse date from sheet
@@ -391,8 +412,8 @@ export const readCustomerLeads = async (spreadsheetUrl: string, apiKey?: string)
     'A1:P1000',
     'Sheet1!A:P',
     'Leads!A:P',
-    'Sheet1!A1:K1000', // Fallback to original
-    'A1:K1000'
+    'Sheet1!A1:N1000', // Fallback to original
+    'A1:N1000'
   ];
 
   let rows: any[][] = [];
@@ -448,6 +469,7 @@ export const updateLeadInSheet = async (
   // 0: Naam Klant, 1: Datum Interesse Klant, 2: Postcode, 3: Huisnummer, 
   // 4: Telefoonnummer, 5: E-mail, 6: Zonnepanelen, 7: Dynamisch Contract,
   // 8: Stroomverbruik, 9: Budget, 10: Nieuwsbrief, 11: Reden Thuisbatterij, 12: Koopintentie?
+  // 13: Notities, 14: Status, 15: Deal Waarde
   const rowData = [
     lead.name, // A - Naam Klant
     lead.branchData?.datumInteresse || '', // B - Datum Interesse Klant (niet aanpasbaar)
@@ -462,13 +484,15 @@ export const updateLeadInSheet = async (
     lead.branchData?.nieuwsbrief || '', // K - Nieuwsbrief
     lead.branchData?.redenThuisbatterij || '', // L - Reden Thuisbatterij
     lead.branchData?.koopintentie || '', // M - Koopintentie?
-    lead.notes || '' // N - Notities (14e kolom)
+    lead.notes || '', // N - Notities
+    lead.status || 'new', // O - Status
+    lead.dealValue ? `€${lead.dealValue.toFixed(2)}` : '' // P - Deal Waarde
   ];
 
   console.log(`🔄 Row data for ${lead.name}:`, rowData);
 
   // Update the specific row - extended range to include all columns
-  const range = `A${lead.sheetRowNumber}:N${lead.sheetRowNumber}`;
+  const range = `A${lead.sheetRowNumber}:P${lead.sheetRowNumber}`;
   
   try {
     const result = await service.updateSheet(spreadsheetId, range, [rowData]);
@@ -497,7 +521,7 @@ export const addLeadToSheet = async (
 
   try {
     // First, read the current data to find the next available row
-    const currentData = await service.readSheet(spreadsheetId, 'A:N');
+    const currentData = await service.readSheet(spreadsheetId, 'A:P');
     
     if (currentData.length === 0) {
       throw new Error('Could not read current spreadsheet data');
@@ -505,12 +529,13 @@ export const addLeadToSheet = async (
 
     // Find the next available row (after headers and existing data)
     const nextRowIndex = currentData.length + 1;
-    const range = `A${nextRowIndex}:N${nextRowIndex}`;
+    const range = `A${nextRowIndex}:P${nextRowIndex}`;
 
     // Convert lead to row format matching your spreadsheet columns:
     // 0: Naam Klant, 1: Datum Interesse Klant, 2: Postcode, 3: Huisnummer, 
     // 4: Telefoonnummer, 5: E-mail, 6: Zonnepanelen, 7: Dynamisch Contract,
     // 8: Stroomverbruik, 9: Budget, 10: Nieuwsbrief, 11: Reden Thuisbatterij, 12: Koopintentie?
+    // 13: Notities, 14: Status, 15: Deal Waarde
     const rowData = [
       lead.name, // A - Naam Klant
       new Date().toLocaleDateString('nl-NL'), // B - Datum Interesse Klant (huidige datum)
@@ -525,7 +550,9 @@ export const addLeadToSheet = async (
       lead.branchData?.nieuwsbrief || '', // K - Nieuwsbrief
       lead.branchData?.redenThuisbatterij || '', // L - Reden Thuisbatterij
       lead.branchData?.koopintentie || '', // M - Koopintentie?
-      lead.notes || '' // N - Notities
+      lead.notes || '', // N - Notities
+      lead.status || 'new', // O - Status
+      lead.dealValue ? `€${lead.dealValue.toFixed(2)}` : '' // P - Deal Waarde
     ];
 
     console.log(`🔄 Adding lead ${lead.name} to row ${nextRowIndex}:`, rowData);

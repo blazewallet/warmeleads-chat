@@ -1,12 +1,115 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { type Lead, type Customer } from '@/lib/crmSystem';
 import { 
   ChartBarIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  PencilIcon,
+  CheckIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
+import { getStatusColor, getStatusLabel } from '@/lib/revenueCalculator';
+
+interface LeadRowProps {
+  lead: Lead;
+  onUpdateLead: (leadId: string, updates: Partial<Lead>) => void;
+}
+
+function LeadRow({ lead, onUpdateLead }: LeadRowProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editStatus, setEditStatus] = useState(lead.status);
+  const [editDealValue, setEditDealValue] = useState(lead.dealValue?.toString() || '');
+
+  const handleSave = () => {
+    const updates: Partial<Lead> = {
+      status: editStatus,
+      dealValue: editDealValue ? parseFloat(editDealValue) : undefined,
+      updatedAt: new Date()
+    };
+    onUpdateLead(lead.id, updates);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditStatus(lead.status);
+    setEditDealValue(lead.dealValue?.toString() || '');
+    setIsEditing(false);
+  };
+
+  return (
+    <tr className="border-b border-gray-100 hover:bg-gray-50">
+      <td className="py-3 px-4">
+        <div className="font-medium text-gray-900">{lead.name}</div>
+        <div className="text-sm text-gray-500">{lead.interest}</div>
+      </td>
+      <td className="py-3 px-4 text-sm text-gray-600">{lead.email}</td>
+      <td className="py-3 px-4">
+        {isEditing ? (
+          <select
+            value={editStatus}
+            onChange={(e) => setEditStatus(e.target.value as Lead['status'])}
+            className="text-sm border border-gray-300 rounded px-2 py-1"
+          >
+            <option value="new">Nieuw</option>
+            <option value="contacted">Gecontacteerd</option>
+            <option value="qualified">Gekwalificeerd</option>
+            <option value="proposal">Voorstel</option>
+            <option value="negotiation">Onderhandeling</option>
+            <option value="converted">Geconverteerd</option>
+            <option value="geclosed">Geclosed</option>
+            <option value="lost">Verloren</option>
+          </select>
+        ) : (
+          <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(lead.status)}`}>
+            {getStatusLabel(lead.status)}
+          </span>
+        )}
+      </td>
+      <td className="py-3 px-4">
+        {isEditing ? (
+          <input
+            type="number"
+            value={editDealValue}
+            onChange={(e) => setEditDealValue(e.target.value)}
+            placeholder="€0"
+            className="text-sm border border-gray-300 rounded px-2 py-1 w-24"
+          />
+        ) : (
+          <span className="text-sm text-gray-600">
+            {lead.dealValue ? `€${lead.dealValue.toLocaleString()}` : '-'}
+          </span>
+        )}
+      </td>
+      <td className="py-3 px-4">
+        {isEditing ? (
+          <div className="flex space-x-2">
+            <button
+              onClick={handleSave}
+              className="text-green-600 hover:text-green-800"
+            >
+              <CheckIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleCancel}
+              className="text-red-600 hover:text-red-800"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <PencilIcon className="w-4 h-4" />
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
 
 interface CustomerLeadsSectionProps {
   customer: Customer;
@@ -30,8 +133,9 @@ export function CustomerLeadsSection({
     contacted: leads.filter(l => l.status === 'contacted').length,
     qualified: leads.filter(l => l.status === 'qualified').length,
     converted: leads.filter(l => l.status === 'converted').length,
+    geclosed: leads.filter(l => l.status === 'geclosed').length,
     lost: leads.filter(l => l.status === 'lost').length,
-    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted').length / leads.length * 100) : 0
+    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'geclosed').length / leads.length * 100) : 0
   };
 
   return (
@@ -95,11 +199,11 @@ export function CustomerLeadsSection({
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Geconverteerd</p>
-              <p className="text-2xl font-bold text-green-600">{stats.converted}</p>
+              <p className="text-sm font-medium text-gray-600">Geclosede Deals</p>
+              <p className="text-2xl font-bold text-green-600">{stats.geclosed}</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <span className="text-xl">✅</span>
+              <span className="text-xl">💰</span>
             </div>
           </div>
         </motion.div>
@@ -194,27 +298,27 @@ export function CustomerLeadsSection({
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {leads.map((lead) => (
-              <div key={lead.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-medium text-gray-900">{lead.name}</div>
-                    <div className="text-sm text-gray-600">{lead.email}</div>
-                    <div className="text-sm text-gray-500">{lead.interest}</div>
-                  </div>
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    lead.status === 'new' ? 'bg-blue-100 text-blue-800' :
-                    lead.status === 'contacted' ? 'bg-yellow-100 text-yellow-800' :
-                    lead.status === 'qualified' ? 'bg-purple-100 text-purple-800' :
-                    lead.status === 'converted' ? 'bg-green-100 text-green-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {lead.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Naam</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Deal Waarde</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Acties</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((lead) => (
+                  <LeadRow 
+                    key={lead.id} 
+                    lead={lead} 
+                    onUpdateLead={onUpdateLead}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

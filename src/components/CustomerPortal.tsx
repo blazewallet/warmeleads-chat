@@ -17,6 +17,7 @@ import { Logo } from './Logo';
 import { useAuthStore } from '../lib/auth';
 import { CustomerLeadsSection } from './CustomerLeadsSection';
 import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
+import { calculateRevenueFromLeads, formatRevenue } from '@/lib/revenueCalculator';
 
 interface CustomerPortalProps {
   onBackToHome: () => void;
@@ -275,26 +276,53 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-3xl font-bold text-white">
-                  {recentOrders.reduce((total: number, order: any) => total + (order.leads || 0), 0).toLocaleString()}
+                  {(() => {
+                    if (customerData?.leadData && customerData.leadData.length > 0) {
+                      return customerData.leadData.length.toLocaleString();
+                    }
+                    // Fallback to demo data for demo user
+                    if (user?.email === 'demo@warmeleads.eu') {
+                      return recentOrders.reduce((total: number, order: any) => total + (order.leads || 0), 0).toLocaleString();
+                    }
+                    return '0';
+                  })()}
                 </div>
                 <div className="text-white/60 text-sm">Totaal Leads</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-green-400">
                   {(() => {
-                    const totalLeads = recentOrders.reduce((total: number, order: any) => total + (order.leads || 0), 0);
-                    const totalConversions = recentOrders.reduce((total: number, order: any) => total + (order.conversions || 0), 0);
-                    return totalLeads > 0 ? ((totalConversions / totalLeads) * 100).toFixed(1) : '0.0';
+                    if (customerData?.leadData && customerData.leadData.length > 0) {
+                      const revenueStats = calculateRevenueFromLeads(customerData.leadData);
+                      return revenueStats.conversionRate.toFixed(1);
+                    }
+                    // Fallback to demo data for demo user
+                    if (user?.email === 'demo@warmeleads.eu') {
+                      const totalLeads = recentOrders.reduce((total: number, order: any) => total + (order.leads || 0), 0);
+                      const totalConversions = recentOrders.reduce((total: number, order: any) => total + (order.conversions || 0), 0);
+                      return totalLeads > 0 ? ((totalConversions / totalLeads) * 100).toFixed(1) : '0.0';
+                    }
+                    return '0.0';
                   })()}%
                 </div>
                 <div className="text-white/60 text-sm">Conversie Rate</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-400">
-                  €{recentOrders.reduce((total: number, order: any) => {
-                    const amount = parseFloat(order.amount.replace('€', '').replace('K', '000'));
-                    return total + (isNaN(amount) ? 0 : amount);
-                  }, 0).toLocaleString()}
+                  {(() => {
+                    if (customerData?.leadData && customerData.leadData.length > 0) {
+                      const revenueStats = calculateRevenueFromLeads(customerData.leadData);
+                      return formatRevenue(revenueStats.totalRevenue);
+                    }
+                    // Fallback to demo data for demo user
+                    if (user?.email === 'demo@warmeleads.eu') {
+                      return recentOrders.reduce((total: number, order: any) => {
+                        const amount = parseFloat(order.amount.replace('€', '').replace('K', '000'));
+                        return total + (isNaN(amount) ? 0 : amount);
+                      }, 0).toLocaleString();
+                    }
+                    return '€0';
+                  })()}
                 </div>
                 <div className="text-white/60 text-sm">Gegenereerde Omzet</div>
               </div>
