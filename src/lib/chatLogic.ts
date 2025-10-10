@@ -901,9 +901,9 @@ Welke optie spreekt u aan?`;
     },
   },
 
-  // Quantity selection
-  quantity_selection: {
-    id: 'quantity_selection',
+  // Quantity selection (alternative)
+  quantity_selection_alt: {
+    id: 'quantity_selection_alt',
     message: 'Hoeveel leads wilt u bestellen?',
     options: ['30 leads', '50 leads', '75 leads', '100+ leads', 'Terug naar opties'],
     nextStep: (response) => {
