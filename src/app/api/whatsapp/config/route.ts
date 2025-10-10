@@ -26,8 +26,13 @@ export async function GET(request: NextRequest) {
     try {
       const storedConfig = await kv.get(`whatsapp-config:${customerId}`) as WhatsAppConfig | null;
       if (storedConfig) {
-        console.log(`✅ WhatsApp config loaded from KV for customer ${customerId}:`, { enabled: storedConfig.enabled, businessName: storedConfig.businessName });
+        console.log(`✅ WhatsApp config loaded from KV for customer ${customerId}`);
+        console.log(`   enabled: ${storedConfig.enabled} (type: ${typeof storedConfig.enabled})`);
+        console.log(`   businessName: ${storedConfig.businessName}`);
+        console.log(`   Full config:`, JSON.stringify(storedConfig, null, 2));
         return NextResponse.json({ config: storedConfig });
+      } else {
+        console.log(`ℹ️ No config found in KV for customer ${customerId}`);
       }
     } catch (kvError) {
       console.log(`ℹ️ KV storage not available, trying customer data backup:`, kvError);
@@ -91,11 +96,19 @@ export async function GET(request: NextRequest) {
 // POST: Sla WhatsApp configuratie op
 export async function POST(request: NextRequest) {
   try {
-    const { customerId, config } = await request.json();
+    const body = await request.json();
+    console.log('📥 POST /api/whatsapp/config - RAW body:', JSON.stringify(body, null, 2));
+    
+    const { customerId, config } = body;
 
     if (!customerId || !config) {
+      console.error('❌ Missing customerId or config in request');
       return NextResponse.json({ error: 'Customer ID and config are required' }, { status: 400 });
     }
+
+    console.log(`📥 Received config for customer ${customerId}:`);
+    console.log(`   enabled: ${config.enabled} (type: ${typeof config.enabled})`);
+    console.log(`   businessName: ${config.businessName}`);
 
     // Validate config - make businessName optional for now
     if (!config.businessName || config.businessName.trim() === '') {
@@ -104,12 +117,13 @@ export async function POST(request: NextRequest) {
     }
 
     // FORCE enabled to be boolean and ensure it's properly set
+    const originalEnabled = config.enabled;
     if (typeof config.enabled !== 'boolean') {
-      console.log('⚠️ Enabled is not boolean, converting to boolean');
+      console.log(`⚠️ Enabled is not boolean (was ${typeof config.enabled}: ${config.enabled}), converting to boolean`);
       config.enabled = Boolean(config.enabled);
     }
     
-    console.log('🔧 FORCED enabled status:', config.enabled, 'type:', typeof config.enabled);
+    console.log(`🔧 Enabled status: ${originalEnabled} -> ${config.enabled} (type: ${typeof config.enabled})`);
 
     // If customer wants to use own number, check if setup is paid
     if (config.useOwnNumber && !config.billing?.setupPaid) {
