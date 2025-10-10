@@ -901,20 +901,6 @@ Welke optie spreekt u aan?`;
     },
   },
 
-  // Quantity selection
-  quantity_selection: {
-    id: 'quantity_selection',
-    message: 'Hoeveel leads wilt u bestellen?',
-    options: ['30 leads', '50 leads', '75 leads', '100+ leads', 'Terug naar opties'],
-    nextStep: (response) => {
-      if (response === 'Terug naar opties') return 'test_order';
-      return 'order_process';
-    },
-    action: (response, profile) => {
-      profile.quantity = response;
-    },
-  },
-
   // Shared test order
   shared_test_order: {
     id: 'shared_test_order',
