@@ -27,7 +27,7 @@ import { PipelineStagesManager, type CustomStage } from '@/lib/pipelineStages';
 interface PipelineBoardProps {
   leads: Lead[];
   customerId: string;
-  onLeadUpdate: (leadId: string, updates: Partial<Lead>) => void;
+  onLeadUpdate: (leadId: string, updates: Partial<Lead>) => void | Promise<void>;
   onStagesChange?: (stages: CustomStage[]) => void;
 }
 

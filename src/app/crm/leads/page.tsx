@@ -561,19 +561,61 @@ export default function CustomerLeadsPage() {
   };
 
   // General update function for pipeline drag & drop
-  const handleUpdateLead = (leadId: string, updates: Partial<Lead>) => {
+  const handleUpdateLead = async (leadId: string, updates: Partial<Lead>) => {
     console.log(`🔄 Pipeline: Updating lead ${leadId} with:`, updates);
     
     if (customerData) {
       const success = crmSystem.updateCustomerLead(customerData.id, leadId, updates);
       if (success) {
-        setLeads(prev => prev.map(lead => 
+        // Update local state immediately
+        const updatedLeads = leads.map(lead => 
           lead.id === leadId ? { ...lead, ...updates, updatedAt: new Date() } : lead
-        ));
+        );
+        setLeads(updatedLeads);
         
-        // Update customer data to trigger refresh in other modules
-        const updatedCustomer = { ...customerData, leadData: leads };
-        setCustomerData(updatedCustomer);
+        // Get updated customer data with new lead status
+        const updatedCustomer = crmSystem.getCustomerById(customerData.id);
+        if (updatedCustomer) {
+          setCustomerData(updatedCustomer);
+          
+          // CRITICAL: Save to Blob Storage for cross-device persistence
+          try {
+            console.log('💾 Pipeline: Syncing lead update to Blob Storage...');
+            const response = await fetch('/api/customer-data', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customerId: customerData.id,
+                customerData: updatedCustomer
+              })
+            });
+            
+            if (response.ok) {
+              console.log(`✅ Pipeline: Lead ${leadId} synced to Blob Storage`);
+            } else {
+              console.error('❌ Pipeline: Failed to sync to Blob Storage:', await response.text());
+            }
+          } catch (error) {
+            console.error('❌ Pipeline: Error syncing to Blob Storage:', error);
+          }
+          
+          // Also sync to Google Sheet if available
+          if (updatedCustomer.googleSheetUrl) {
+            try {
+              const updatedLead = updatedLeads.find(l => l.id === leadId);
+              if (updatedLead && updatedLead.sheetRowNumber) {
+                console.log('📊 Pipeline: Syncing lead update to Google Sheet...');
+                await updateLeadInSheet(
+                  updatedCustomer.googleSheetUrl,
+                  updatedLead
+                );
+                console.log(`✅ Pipeline: Lead ${leadId} synced to Google Sheet`);
+              }
+            } catch (sheetError) {
+              console.error('❌ Pipeline: Failed to sync to Google Sheet:', sheetError);
+            }
+          }
+        }
         
         console.log(`✅ Pipeline: Lead ${leadId} updated successfully`);
       }
