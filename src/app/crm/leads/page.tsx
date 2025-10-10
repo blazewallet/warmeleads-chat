@@ -174,33 +174,45 @@ export default function CustomerLeadsPage() {
     
     let customer: Customer | null = null;
     try {
-      const response = await fetch('/api/customer-data');
+      // CRITICAL: Use email as customerId to fetch from Blob Storage
+      const customerId = user?.email;
+      if (!customerId) {
+        console.error('❌ Leads Portal: No user email found for customer lookup');
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log(`📡 Leads Portal: Fetching customer data for ${customerId}`);
+      const response = await fetch(`/api/customer-data?customerId=${encodeURIComponent(customerId)}`);
+      
       if (response.ok) {
         const data = await response.json();
         console.log('📡 Leads Portal: API response:', data);
         
         // Handle different response structures
-        if (data.customers && Array.isArray(data.customers)) {
-          customer = data.customers.find((c: any) => c.email === user?.email);
+        if (data.success && data.customerData) {
+          customer = data.customerData;
+          console.log('✅ Leads Portal: Customer data fetched from Blob Storage');
+          console.log('  googleSheetUrl:', customer.googleSheetUrl);
         } else if (data.customer) {
           customer = data.customer;
-        } else if (data.success && data.customer) {
-          customer = data.customer;
+          console.log('✅ Leads Portal: Customer data fetched (legacy structure)');
         } else {
           console.log('ℹ️ Leads Portal: Unexpected API response structure, falling back to localStorage.');
           const allCustomers = crmSystem.getAllCustomers();
           customer = allCustomers.find(c => c.email === user?.email) || null;
         }
         
-        if (customer) {
-          console.log('✅ Leads Portal: Customer data fetched from API.');
-        } else {
+        if (!customer) {
           console.log('ℹ️ Leads Portal: Customer not found in API response, falling back to localStorage.');
           const allCustomers = crmSystem.getAllCustomers();
           customer = allCustomers.find(c => c.email === user?.email) || null;
         }
       } else {
-        console.log('ℹ️ Leads Portal: API fetch failed, falling back to localStorage.');
+        console.error(`❌ Leads Portal: API fetch failed with status ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('  Error:', errorData);
+        
         // Fallback to localStorage if API fails or no data
         const allCustomers = crmSystem.getAllCustomers();
         customer = allCustomers.find(c => c.email === user?.email) || null;
