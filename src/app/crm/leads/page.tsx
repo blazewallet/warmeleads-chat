@@ -30,6 +30,7 @@ import { crmSystem, type Customer, type Lead } from '@/lib/crmSystem';
 import { readCustomerLeads, GoogleSheetsService, updateLeadInSheet, addLeadToSheet } from '@/lib/googleSheetsAPI';
 import { branchIntelligence, type Branch, type BranchIntelligence, type BranchAnalytics } from '@/lib/branchIntelligence';
 import { PipelineBoard } from '@/components/PipelineBoard';
+import { type CustomStage, PipelineStagesManager } from '@/lib/pipelineStages';
 
 export default function CustomerLeadsPage() {
   const router = useRouter();
@@ -51,6 +52,9 @@ export default function CustomerLeadsPage() {
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [leadReclamation, setLeadReclamation] = useState<{hasReclamation: boolean, reclamation?: any}>({ hasReclamation: false });
+  
+  // Custom pipeline stages
+  const [customStages, setCustomStages] = useState<CustomStage[]>([]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,6 +78,17 @@ export default function CustomerLeadsPage() {
       });
     }
   }, [customerData]);
+  
+  // Load custom pipeline stages when customer changes
+  useEffect(() => {
+    if (customerData?.id || user?.email) {
+      const customerId = customerData?.id || user?.email || 'unknown';
+      const stagesManager = new PipelineStagesManager(customerId);
+      const loadedStages = stagesManager.getStages();
+      setCustomStages(loadedStages);
+      console.log('Loaded custom stages:', loadedStages);
+    }
+  }, [customerData, user]);
   
   // Force refresh lead data when viewing
   const handleViewLead = async (lead: Lead) => {
@@ -491,6 +506,15 @@ export default function CustomerLeadsPage() {
   };
 
   const getStatusColor = (status: Lead['status']) => {
+    // Check if status matches a custom stage
+    const customStage = customStages.find(s => s.id === status);
+    if (customStage) {
+      // Convert bg-color-500 to bg-color-100 text-color-800 for lighter appearance
+      const lightColor = customStage.color.replace('500', '100') + ' ' + customStage.color.replace('bg-', 'text-').replace('500', '800');
+      return lightColor;
+    }
+    
+    // Fallback for old statuses
     switch (status) {
       case 'new': return 'bg-blue-100 text-blue-800';
       case 'contacted': return 'bg-yellow-100 text-yellow-800';
@@ -500,11 +524,18 @@ export default function CustomerLeadsPage() {
       case 'converted': return 'bg-green-100 text-green-800';
       case 'geclosed': return 'bg-emerald-100 text-emerald-800';
       case 'lost': return 'bg-red-100 text-red-800';
-      default: return 'bg-white/10 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusIcon = (status: Lead['status']) => {
+    // Check if status matches a custom stage
+    const customStage = customStages.find(s => s.id === status);
+    if (customStage) {
+      return customStage.icon;
+    }
+    
+    // Fallback for old statuses
     switch (status) {
       case 'new': return '🆕';
       case 'contacted': return '📞';
@@ -887,24 +918,24 @@ export default function CustomerLeadsPage() {
            transition={{ delay: 0.4 }}
            className="mb-8"
          >
-          {/* Mobile Collapsible Stats */}
-          <div className="md:hidden">
-            <motion.div
-              className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 overflow-hidden"
-            >
-              {/* Collapsed Header */}
-              <div 
-                className="p-4 cursor-pointer hover:bg-white/20 transition-colors"
-                onClick={() => setStatsExpanded(!statsExpanded)}
-              >
+           {/* Mobile Collapsible Stats */}
+           <div className="md:hidden">
+             <motion.div
+               className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden"
+             >
+               {/* Collapsed Header */}
+               <div 
+                 className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                 onClick={() => setStatsExpanded(!statsExpanded)}
+               >
                  <div className="flex items-center justify-between">
                    <div className="flex items-center space-x-3">
                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
                        <ChartBarIcon className="w-6 h-6 text-white" />
                      </div>
                      <div>
-                       <h3 className="text-lg font-bold text-white">{stats.total} Leads</h3>
-                       <p className="text-sm text-white/70">{stats.new} nieuw • {stats.converted} geconverteerd</p>
+                       <h3 className="text-lg font-bold text-gray-900">{stats.total} Leads</h3>
+                       <p className="text-sm text-gray-600">{stats.new} nieuw • {stats.converted} geconverteerd</p>
                      </div>
                    </div>
                    <div className="flex items-center space-x-2">
@@ -915,7 +946,7 @@ export default function CustomerLeadsPage() {
                        animate={{ rotate: statsExpanded ? 180 : 0 }}
                        transition={{ duration: 0.2 }}
                      >
-                       <svg className="w-5 h-5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                        </svg>
                      </motion.div>
@@ -936,19 +967,19 @@ export default function CustomerLeadsPage() {
                      <div className="p-4 grid grid-cols-2 gap-4">
                        <div className="text-center p-3 bg-yellow-50 rounded-xl">
                          <div className="text-2xl font-bold text-yellow-600">{stats.contacted}</div>
-                         <div className="text-xs text-white/70 mt-1">📞 Gecontacteerd</div>
+                         <div className="text-xs text-gray-600 mt-1">📞 Gecontacteerd</div>
                        </div>
                        <div className="text-center p-3 bg-green-50 rounded-xl">
                          <div className="text-2xl font-bold text-green-600">{stats.converted}</div>
-                         <div className="text-xs text-white/70 mt-1">✅ Geconverteerd</div>
+                         <div className="text-xs text-gray-600 mt-1">✅ Geconverteerd</div>
                        </div>
                        <div className="text-center p-3 bg-purple-50 rounded-xl">
                          <div className="text-2xl font-bold text-purple-600">{stats.conversionRate.toFixed(1)}%</div>
-                         <div className="text-xs text-white/70 mt-1">📊 Conversie</div>
+                         <div className="text-xs text-gray-600 mt-1">📊 Conversie</div>
                        </div>
                        <div className="text-center p-3 bg-red-50 rounded-xl">
                          <div className="text-2xl font-bold text-red-600">{filteredLeads.filter(l => l.status === 'lost').length}</div>
-                         <div className="text-xs text-white/70 mt-1">❌ Verloren</div>
+                         <div className="text-xs text-gray-600 mt-1">❌ Verloren</div>
                        </div>
                      </div>
                    </motion.div>
@@ -962,12 +993,12 @@ export default function CustomerLeadsPage() {
              <motion.div
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}
-               className="bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-white/20"
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
              >
                <div className="flex items-center justify-between">
                  <div>
-                   <p className="text-sm font-medium text-white/70">Totaal Leads</p>
-                   <p className="text-3xl font-bold text-white">{stats.total}</p>
+                   <p className="text-sm font-medium text-gray-600">Totaal Leads</p>
+                   <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
                  </div>
                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                    <UserIcon className="w-6 h-6 text-blue-600" />
@@ -979,14 +1010,14 @@ export default function CustomerLeadsPage() {
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}
                transition={{ delay: 0.1 }}
-               className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-lg"
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
              >
                <div className="flex items-center justify-between">
                  <div>
-                   <p className="text-sm font-medium text-white/70">Nieuwe</p>
-                   <p className="text-3xl font-bold text-blue-400">{stats.new}</p>
+                   <p className="text-sm font-medium text-gray-600">Nieuwe</p>
+                   <p className="text-3xl font-bold text-blue-600">{stats.new}</p>
                  </div>
-                 <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                    <span className="text-xl">🆕</span>
                  </div>
                </div>
@@ -996,14 +1027,14 @@ export default function CustomerLeadsPage() {
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}
                transition={{ delay: 0.2 }}
-               className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-lg"
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
              >
                <div className="flex items-center justify-between">
                  <div>
-                   <p className="text-sm font-medium text-white/70">Gecontacteerd</p>
-                   <p className="text-3xl font-bold text-yellow-400">{stats.contacted}</p>
+                   <p className="text-sm font-medium text-gray-600">Gecontacteerd</p>
+                   <p className="text-3xl font-bold text-yellow-600">{stats.contacted}</p>
                  </div>
-                 <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                 <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
                    <span className="text-xl">📞</span>
                  </div>
                </div>
@@ -1013,14 +1044,14 @@ export default function CustomerLeadsPage() {
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}
                transition={{ delay: 0.3 }}
-               className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-lg"
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
              >
                <div className="flex items-center justify-between">
                  <div>
-                   <p className="text-sm font-medium text-white/70">Geconverteerd</p>
-                   <p className="text-3xl font-bold text-green-400">{stats.converted}</p>
+                   <p className="text-sm font-medium text-gray-600">Geconverteerd</p>
+                   <p className="text-3xl font-bold text-green-600">{stats.converted}</p>
                  </div>
-                 <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                 <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                    <span className="text-xl">✅</span>
                  </div>
                </div>
@@ -1030,15 +1061,15 @@ export default function CustomerLeadsPage() {
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}
                transition={{ delay: 0.4 }}
-               className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-lg"
+               className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
              >
                <div className="flex items-center justify-between">
                  <div>
-                   <p className="text-sm font-medium text-white/70">Conversie</p>
-                   <p className="text-3xl font-bold text-purple-400">{stats.conversionRate.toFixed(1)}%</p>
+                   <p className="text-sm font-medium text-gray-600">Conversie</p>
+                   <p className="text-3xl font-bold text-purple-600">{stats.conversionRate.toFixed(1)}%</p>
                  </div>
-                 <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                   <ChartBarIcon className="w-6 h-6 text-purple-400" />
+                 <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                   <ChartBarIcon className="w-6 h-6 text-purple-600" />
                  </div>
                </div>
              </motion.div>
@@ -1052,50 +1083,47 @@ export default function CustomerLeadsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 mb-8 shadow-lg"
+          className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 mb-8 shadow-lg"
         >
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Zoek leads op naam, email, bedrijf of interesse..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/30 focus:border-white/30 bg-white/5 text-white"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
               />
             </div>
             
-            {/* Status Filter */}
+            {/* Status Filter - Shows custom pipeline stages */}
             <div className="relative">
-              <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50 pointer-events-none z-10" />
+              <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="w-full pl-10 pr-10 py-3 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/30 focus:border-white/30 bg-white/5 text-white bg-white appearance-none cursor-pointer"
+                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple bg-white appearance-none cursor-pointer"
               >
                 <option value="all">Alle statussen</option>
-                <option value="new">🆕 Nieuw</option>
-                <option value="contacted">📞 Gecontacteerd</option>
-                <option value="qualified">⭐ Gekwalificeerd</option>
-                <option value="proposal">📄 Voorstel</option>
-                <option value="negotiation">🤝 Onderhandeling</option>
-                <option value="converted">✅ Geconverteerd</option>
-                <option value="geclosed">💰 Geclosed</option>
-                <option value="lost">❌ Verloren</option>
+                {customStages.map(stage => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.icon} {stage.name}
+                  </option>
+                ))}
               </select>
-              <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>
 
             {/* Branch Filter */}
             <div className="relative">
-              <ChartBarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50 pointer-events-none z-10" />
+              <ChartBarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
               <select
                 value={filterBranch}
                 onChange={(e) => setFilterBranch(e.target.value as any)}
-                className="w-full pl-10 pr-10 py-3 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/30 focus:border-white/30 bg-white/5 text-white bg-white appearance-none cursor-pointer"
+                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-purple focus:border-brand-purple bg-white appearance-none cursor-pointer"
               >
                 <option value="all">Alle branches</option>
                 <option value="Thuisbatterijen">🔋 Thuisbatterijen</option>
@@ -1106,7 +1134,7 @@ export default function CustomerLeadsPage() {
                 <option value="Custom">🎯 Multi-Branch</option>
                 <option value="Unknown">❓ Overige</option>
               </select>
-              <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>
@@ -1218,11 +1246,11 @@ export default function CustomerLeadsPage() {
         {viewMode === 'pipeline' ? (
           <PipelineBoard 
             leads={filteredLeads}
-            branch={filterBranch as Branch}
+            customerId={customerData?.id || user?.email || 'unknown'}
             onLeadUpdate={handleUpdateLead}
-            onStageCreate={(stageName) => {
-              console.log(`Creating new stage: ${stageName}`);
-              // TODO: Implement stage creation
+            onStagesChange={(stages) => {
+              setCustomStages(stages);
+              console.log('Pipeline stages updated:', stages);
             }}
           />
         ) : (
@@ -1231,15 +1259,15 @@ export default function CustomerLeadsPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
-            className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-lg overflow-hidden"
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden"
           >
           {paginatedLeads.length === 0 ? (
             <div className="text-center py-16">
-              <UserIcon className="w-16 h-16 text-white/50 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">
+              <UserIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {searchTerm || filterStatus !== 'all' ? 'Geen leads gevonden' : 'Nog geen leads'}
               </h3>
-              <p className="text-white/70 mb-6">
+              <p className="text-gray-600 mb-6">
                 {customerData?.googleSheetUrl 
                   ? 'Synchroniseer met Google Sheets om uw leads te importeren.'
                   : 'Uw leads verschijnen hier na aankoop en Google Sheets koppeling.'
@@ -1263,7 +1291,7 @@ export default function CustomerLeadsPage() {
                     key={lead.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-5 cursor-pointer hover:bg-white/15 transition-all"
+                    className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 cursor-pointer hover:shadow-md transition-all"
                     onClick={() => handleViewLead(lead)}
                   >
                     {/* Header met Avatar en Naam */}
@@ -1275,14 +1303,14 @@ export default function CustomerLeadsPage() {
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-white text-lg break-words pr-2">{lead.name}</h3>
+                          <h3 className="font-bold text-gray-900 text-lg break-words pr-2">{lead.name}</h3>
                           {lead.company && (
-                            <p className="text-sm text-white/70 truncate">{lead.company}</p>
+                            <p className="text-sm text-gray-600 truncate">{lead.company}</p>
                           )}
                           <div className="flex items-center space-x-2 mt-1">
-                            <span className="text-xs text-white/50">Rij {lead.sheetRowNumber}</span>
+                            <span className="text-xs text-gray-400">Rij {lead.sheetRowNumber}</span>
                             <span className="text-xs text-gray-300">•</span>
-                            <span className="text-xs text-white/50">{new Date(lead.updatedAt).toLocaleDateString('nl-NL')}</span>
+                            <span className="text-xs text-gray-400">{new Date(lead.updatedAt).toLocaleDateString('nl-NL')}</span>
                           </div>
                           
                           {/* 🧠 AI Branch Detection Badge */}
@@ -1303,7 +1331,7 @@ export default function CustomerLeadsPage() {
                                   intelligence.detectedBranch === 'Warmtepompen' ? 'bg-red-100 text-red-800' :
                                   intelligence.detectedBranch === 'Zonnepanelen' ? 'bg-orange-100 text-orange-800' :
                                   intelligence.detectedBranch === 'Airco' ? 'bg-blue-100 text-blue-800' :
-                                  'bg-white/10 text-gray-800'
+                                  'bg-gray-100 text-gray-800'
                                 }`}>
                                   {branchIcon} {intelligence.detectedBranch} ({intelligence.confidence}%)
                                 </span>
@@ -1381,7 +1409,7 @@ export default function CustomerLeadsPage() {
                         <EnvelopeIcon className="w-4 h-4 mr-3 text-blue-500 flex-shrink-0" />
                         <a 
                           href={`mailto:${lead.email}`} 
-                          className="text-white/80 hover:text-blue-600 truncate flex-1"
+                          className="text-gray-700 hover:text-blue-600 truncate flex-1"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {lead.email}
@@ -1391,14 +1419,14 @@ export default function CustomerLeadsPage() {
                         <PhoneIcon className="w-4 h-4 mr-3 text-green-500 flex-shrink-0" />
                         <a 
                           href={`tel:${lead.phone}`} 
-                          className="text-white/80 hover:text-green-600"
+                          className="text-gray-700 hover:text-green-600"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {lead.phone}
                         </a>
                       </div>
                       {lead.branchData?.postcode && (
-                        <div className="flex items-center text-sm text-white/70">
+                        <div className="flex items-center text-sm text-gray-600">
                           <MapPinIcon className="w-4 h-4 mr-3 text-purple-500 flex-shrink-0" />
                           <span>{lead.branchData.postcode} {lead.branchData.huisnummer}</span>
                         </div>
@@ -1407,9 +1435,9 @@ export default function CustomerLeadsPage() {
 
                     {/* Interest & Budget */}
                     <div className="mb-4">
-                      <div className="font-medium text-white mb-2">{lead.interest}</div>
+                      <div className="font-medium text-gray-900 mb-2">{lead.interest}</div>
                       {lead.budget && (
-                        <div className="flex items-center text-sm text-white/70">
+                        <div className="flex items-center text-sm text-gray-600">
                           <CurrencyEuroIcon className="w-4 h-4 mr-2 text-yellow-500" />
                           {lead.budget}
                         </div>
@@ -1436,7 +1464,7 @@ export default function CustomerLeadsPage() {
                         )}
                       </div>
                       
-                      <div className="text-xs text-white/50 text-right ml-2 flex-shrink-0">
+                      <div className="text-xs text-gray-400 text-right ml-2 flex-shrink-0">
                         Tik voor details →
                       </div>
                     </div>
@@ -1447,21 +1475,21 @@ export default function CustomerLeadsPage() {
               {/* Desktop Table View */}
               <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-white/5">
+                <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Lead Info
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Contact & Locatie
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Interesse & Budget
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Acties
                     </th>
                   </tr>
@@ -1470,7 +1498,7 @@ export default function CustomerLeadsPage() {
                   {paginatedLeads.map((lead) => (
                     <tr 
                       key={lead.id} 
-                      className="hover:bg-white/10 cursor-pointer" 
+                      className="hover:bg-gray-50 cursor-pointer" 
                       onClick={() => handleViewLead(lead)}
                       title="Klik voor lead details"
                     >
@@ -1482,17 +1510,17 @@ export default function CustomerLeadsPage() {
                             </span>
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-bold text-white">
+                            <div className="text-sm font-bold text-gray-900">
                               {lead.name}
                             </div>
                             {lead.company && (
-                              <div className="text-sm text-white/70 flex items-center">
+                              <div className="text-sm text-gray-600 flex items-center">
                                 <BuildingOfficeIcon className="w-4 h-4 mr-1" />
                                 {lead.company}
                               </div>
                             )}
                             {lead.sheetRowNumber && (
-                              <div className="text-xs text-white/50">
+                              <div className="text-xs text-gray-400">
                                 Sheet rij: {lead.sheetRowNumber}
                               </div>
                             )}
@@ -1501,26 +1529,26 @@ export default function CustomerLeadsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="space-y-2">
-                          <div className="flex items-center text-sm text-white/70">
+                          <div className="flex items-center text-sm text-gray-600">
                             <EnvelopeIcon className="w-4 h-4 mr-2" />
                             <a href={`mailto:${lead.email}`} className="hover:text-brand-purple">
                               {lead.email}
                             </a>
                           </div>
-                          <div className="flex items-center text-sm text-white/70">
+                          <div className="flex items-center text-sm text-gray-600">
                             <PhoneIcon className="w-4 h-4 mr-2" />
                             <a href={`tel:${lead.phone}`} className="hover:text-brand-purple">
                               {lead.phone}
                             </a>
                           </div>
                           {lead.branchData?.postcode && lead.branchData?.huisnummer && (
-                            <div className="flex items-center text-sm text-white/70">
+                            <div className="flex items-center text-sm text-gray-600">
                               <MapPinIcon className="w-4 h-4 mr-2" />
                               {lead.branchData.postcode} {lead.branchData.huisnummer}
                             </div>
                           )}
                           {lead.branchData?.datumInteresse && (
-                            <div className="text-xs text-white/60">
+                            <div className="text-xs text-gray-500">
                               Interesse: {lead.branchData.datumInteresse}
                             </div>
                           )}
@@ -1528,16 +1556,16 @@ export default function CustomerLeadsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="space-y-2">
-                          <div className="font-medium text-white">{lead.interest}</div>
+                          <div className="font-medium text-gray-900">{lead.interest}</div>
                           {lead.budget && (
-                            <div className="flex items-center text-sm text-white/70">
+                            <div className="flex items-center text-sm text-gray-600">
                               <CurrencyEuroIcon className="w-4 h-4 mr-2" />
                               {lead.budget}
                             </div>
                           )}
                           
                           {/* Clean table view - branch details only in popup */}
-                          <div className="text-xs text-white/60 italic">
+                          <div className="text-xs text-gray-500 italic">
                             📋 Klik voor alle thuisbatterij details
                           </div>
                         </div>
@@ -1549,16 +1577,13 @@ export default function CustomerLeadsPage() {
                           onClick={(e) => e.stopPropagation()} // Prevent row click
                           className={`px-3 py-2 text-sm font-medium rounded-lg border-0 ${getStatusColor(lead.status)}`}
                         >
-                          <option value="new">🆕 Nieuw</option>
-                          <option value="contacted">📞 Gecontacteerd</option>
-                          <option value="qualified">⭐ Gekwalificeerd</option>
-                          <option value="proposal">📄 Voorstel</option>
-                          <option value="negotiation">🤝 Onderhandeling</option>
-                          <option value="converted">✅ Geconverteerd</option>
-                          <option value="geclosed">💰 Geclosed</option>
-                          <option value="lost">❌ Verloren</option>
+                          {customStages.map(stage => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.icon} {stage.name}
+                            </option>
+                          ))}
                         </select>
-                        <div className="text-xs text-white/60 mt-1">
+                        <div className="text-xs text-gray-500 mt-1">
                           Bijgewerkt: {new Date(lead.updatedAt).toLocaleDateString('nl-NL')}
                         </div>
                       </td>
@@ -1612,11 +1637,11 @@ export default function CustomerLeadsPage() {
           
           {/* Pagination Controls - Responsive */}
           {filteredLeads.length > 0 && (
-            <div className="px-4 md:px-6 py-4 bg-white/5 border-t border-white/10">
+            <div className="px-4 md:px-6 py-4 bg-gray-50 border-t border-gray-200">
               {/* Mobile Pagination */}
               <div className="md:hidden space-y-3">
                 <div className="text-center">
-                  <span className="text-sm text-white/80">
+                  <span className="text-sm text-gray-700">
                     {((currentPage - 1) * leadsPerPage) + 1}-{Math.min(currentPage * leadsPerPage, filteredLeads.length)} van {filteredLeads.length} leads
                   </span>
                 </div>
@@ -1625,7 +1650,7 @@ export default function CustomerLeadsPage() {
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/20 font-medium text-white"
+                    className="px-4 py-2 bg-white border border-gray-300 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 font-medium"
                   >
                     ← Vorige
                   </button>
@@ -1637,7 +1662,7 @@ export default function CustomerLeadsPage() {
                   <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/20 font-medium text-white"
+                    className="px-4 py-2 bg-white border border-gray-300 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 font-medium"
                   >
                     Volgende →
                   </button>
@@ -1650,7 +1675,7 @@ export default function CustomerLeadsPage() {
                       setLeadsPerPage(Number(e.target.value));
                       setCurrentPage(1); // Reset to first page
                     }}
-                    className="px-4 py-2 border border-white/20 rounded-xl text-sm bg-white font-medium"
+                    className="px-4 py-2 border border-gray-300 rounded-xl text-sm bg-white font-medium"
                   >
                     <option value={10}>📄 10 per pagina</option>
                     <option value={25}>📄 25 per pagina</option>
@@ -1663,7 +1688,7 @@ export default function CustomerLeadsPage() {
               {/* Desktop Pagination */}
               <div className="hidden md:flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                  <span className="text-sm text-white/80">
+                  <span className="text-sm text-gray-700">
                     Toon {((currentPage - 1) * leadsPerPage) + 1}-{Math.min(currentPage * leadsPerPage, filteredLeads.length)} van {filteredLeads.length} leads
                   </span>
                   
@@ -1673,7 +1698,7 @@ export default function CustomerLeadsPage() {
                       setLeadsPerPage(Number(e.target.value));
                       setCurrentPage(1); // Reset to first page
                     }}
-                    className="px-3 py-1 border border-white/20 rounded-lg text-sm"
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm"
                   >
                     <option value={10}>10 per pagina</option>
                     <option value={25}>25 per pagina</option>
@@ -1686,7 +1711,7 @@ export default function CustomerLeadsPage() {
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1 border border-white/20 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
                   >
                     Vorige
                   </button>
@@ -1698,7 +1723,7 @@ export default function CustomerLeadsPage() {
                   <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1 border border-white/20 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
                   >
                     Volgende
                   </button>
@@ -1725,7 +1750,7 @@ export default function CustomerLeadsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-gradient-to-br from-purple-900/90 to-blue-900/90 backdrop-blur-xl rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-white/20"
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
             >
               {/* Header */}
               <div className="bg-gradient-to-r from-brand-purple to-brand-pink p-6 text-white">
@@ -1751,31 +1776,31 @@ export default function CustomerLeadsPage() {
                   {/* Basic Info */}
                   <div className="space-y-6">
                     <div>
-                      <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         <UserIcon className="w-5 h-5 mr-2 text-blue-600" />
                         Contactgegevens
                       </h4>
-                      <div className="space-y-3 bg-white/5 p-4 rounded-lg">
+                      <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
                         <div className="flex items-center">
-                          <EnvelopeIcon className="w-4 h-4 mr-3 text-white/60" />
-                          <span className="text-white">{viewingLead.email}</span>
+                          <EnvelopeIcon className="w-4 h-4 mr-3 text-gray-500" />
+                          <span className="text-gray-900">{viewingLead.email}</span>
                         </div>
                         <div className="flex items-center">
-                          <PhoneIcon className="w-4 h-4 mr-3 text-white/60" />
-                          <span className="text-white">{viewingLead.phone}</span>
+                          <PhoneIcon className="w-4 h-4 mr-3 text-gray-500" />
+                          <span className="text-gray-900">{viewingLead.phone}</span>
                         </div>
                         {viewingLead.branchData?.postcode && viewingLead.branchData?.huisnummer && (
                           <div className="flex items-center">
-                            <MapPinIcon className="w-4 h-4 mr-3 text-white/60" />
-                            <span className="text-white">{viewingLead.branchData.postcode} {viewingLead.branchData.huisnummer}</span>
+                            <MapPinIcon className="w-4 h-4 mr-3 text-gray-500" />
+                            <span className="text-gray-900">{viewingLead.branchData.postcode} {viewingLead.branchData.huisnummer}</span>
                           </div>
                         )}
                         {viewingLead.company && (
                           <div className="flex items-center">
-                            <svg className="w-4 h-4 mr-3 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 mr-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                             </svg>
-                            <span className="text-white">{viewingLead.company}</span>
+                            <span className="text-gray-900">{viewingLead.company}</span>
                           </div>
                         )}
                       </div>
@@ -1783,25 +1808,25 @@ export default function CustomerLeadsPage() {
 
                     {/* Interest & Budget */}
                     <div>
-                      <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         <CurrencyEuroIcon className="w-5 h-5 mr-2 text-green-600" />
                         Interesse & Budget
                       </h4>
-                      <div className="space-y-3 bg-white/5 p-4 rounded-lg">
+                      <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
                         <div>
-                          <span className="text-sm text-white/60">Interesse:</span>
-                          <p className="font-medium text-white">{viewingLead.interest}</p>
+                          <span className="text-sm text-gray-500">Interesse:</span>
+                          <p className="font-medium text-gray-900">{viewingLead.interest}</p>
                         </div>
                         {viewingLead.budget && (
                           <div>
-                            <span className="text-sm text-white/60">Budget:</span>
-                            <p className="font-medium text-white">{viewingLead.budget}</p>
+                            <span className="text-sm text-gray-500">Budget:</span>
+                            <p className="font-medium text-gray-900">{viewingLead.budget}</p>
                           </div>
                         )}
                         {viewingLead.branchData?.datumInteresse && (
                           <div>
-                            <span className="text-sm text-white/60">Datum interesse:</span>
-                            <p className="font-medium text-white">{viewingLead.branchData.datumInteresse}</p>
+                            <span className="text-sm text-gray-500">Datum interesse:</span>
+                            <p className="font-medium text-gray-900">{viewingLead.branchData.datumInteresse}</p>
                           </div>
                         )}
                       </div>
@@ -1811,7 +1836,7 @@ export default function CustomerLeadsPage() {
                   {/* Branch-Specific Data */}
                   <div className="space-y-6">
                     <div>
-                      <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         <ChartBarIcon className="w-5 h-5 mr-2 text-purple-600" />
                         Thuisbatterij Specifiek
                       </h4>
@@ -1822,7 +1847,7 @@ export default function CustomerLeadsPage() {
                         <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
                           <div className="flex items-center">
                             <div className="w-3 h-3 bg-yellow-400 rounded-full mr-3"></div>
-                            <span className="text-sm font-medium text-white/80">Zonnepanelen</span>
+                            <span className="text-sm font-medium text-gray-700">Zonnepanelen</span>
                           </div>
                           <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
                             {viewingLead.branchData?.zonnepanelen || 'Geen data'}
@@ -1833,7 +1858,7 @@ export default function CustomerLeadsPage() {
                         <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                           <div className="flex items-center">
                             <div className="w-3 h-3 bg-blue-400 rounded-full mr-3"></div>
-                            <span className="text-sm font-medium text-white/80">Dynamisch Contract</span>
+                            <span className="text-sm font-medium text-gray-700">Dynamisch Contract</span>
                           </div>
                           <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
                             {viewingLead.branchData?.dynamischContract || 'Geen data'}
@@ -1844,7 +1869,7 @@ export default function CustomerLeadsPage() {
                         <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
                           <div className="flex items-center">
                             <div className="w-3 h-3 bg-purple-400 rounded-full mr-3"></div>
-                            <span className="text-sm font-medium text-white/80">Stroomverbruik</span>
+                            <span className="text-sm font-medium text-gray-700">Stroomverbruik</span>
                           </div>
                           <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
                             {viewingLead.branchData?.stroomverbruik || 'Geen data'} kWh
@@ -1855,16 +1880,16 @@ export default function CustomerLeadsPage() {
                         <div className="p-3 bg-indigo-50 rounded-lg">
                           <div className="flex items-center mb-2">
                             <div className="w-3 h-3 bg-indigo-400 rounded-full mr-3"></div>
-                            <span className="text-sm font-medium text-white/80">Reden Thuisbatterij</span>
+                            <span className="text-sm font-medium text-gray-700">Reden Thuisbatterij</span>
                           </div>
-                          <p className="text-sm text-white ml-6">{viewingLead.branchData?.redenThuisbatterij || 'Geen data'}</p>
+                          <p className="text-sm text-gray-900 ml-6">{viewingLead.branchData?.redenThuisbatterij || 'Geen data'}</p>
                         </div>
 
                         {/* Koopintentie - FORCE SHOW */}
                         <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                           <div className="flex items-center">
                             <div className="w-3 h-3 bg-green-400 rounded-full mr-3"></div>
-                            <span className="text-sm font-medium text-white/80">Koopintentie</span>
+                            <span className="text-sm font-medium text-gray-700">Koopintentie</span>
                           </div>
                           <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
                             {viewingLead.branchData?.koopintentie || 'Geen data'}
@@ -1872,12 +1897,12 @@ export default function CustomerLeadsPage() {
                         </div>
 
                         {/* Nieuwsbrief - FORCE SHOW */}
-                        <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div className="flex items-center">
                             <div className="w-3 h-3 bg-gray-400 rounded-full mr-3"></div>
-                            <span className="text-sm font-medium text-white/80">Nieuwsbrief</span>
+                            <span className="text-sm font-medium text-gray-700">Nieuwsbrief</span>
                           </div>
-                          <span className="px-3 py-1 bg-white/10 text-gray-800 rounded-full text-xs font-medium">
+                          <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
                             {viewingLead.branchData?.nieuwsbrief || 'Geen data'}
                           </span>
                         </div>
@@ -1887,12 +1912,12 @@ export default function CustomerLeadsPage() {
                     {/* Notes */}
                     {viewingLead.notes && (
                       <div>
-                        <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                           <DocumentTextIcon className="w-5 h-5 mr-2 text-orange-600" />
                           Notities
                         </h4>
                         <div className="bg-orange-50 p-4 rounded-lg">
-                          <p className="text-sm text-white whitespace-pre-wrap">{viewingLead.notes}</p>
+                          <p className="text-sm text-gray-900 whitespace-pre-wrap">{viewingLead.notes}</p>
                         </div>
                       </div>
                     )}
@@ -1900,7 +1925,7 @@ export default function CustomerLeadsPage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="space-y-3 mt-8 pt-6 border-t border-white/10">
+                <div className="space-y-3 mt-8 pt-6 border-t border-gray-200">
                   {/* Reclamatie status of reclameer button */}
                   {leadReclamation.hasReclamation ? (
                     <div className="w-full px-4 py-3 bg-amber-50 border-2 border-amber-300 rounded-xl">
@@ -1974,7 +1999,7 @@ export default function CustomerLeadsPage() {
                   <div className="flex space-x-3">
                     <button
                       onClick={() => setViewingLead(null)}
-                      className="flex-1 px-4 py-3 border-2 border-white/20 text-white/80 rounded-xl hover:bg-white/10 transition-colors font-medium"
+                      className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
                     >
                       Sluiten
                     </button>
@@ -2010,22 +2035,22 @@ export default function CustomerLeadsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-gradient-to-br from-purple-900/90 to-blue-900/90 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/20"
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             >
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold text-white">Lead Bewerken</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">Lead Bewerken</h3>
                   <button
                     onClick={() => setEditingLead(null)}
-                    className="text-white/50 hover:text-white/70"
+                    className="text-gray-400 hover:text-gray-600"
                   >
                     ✕
                   </button>
                 </div>
-                <p className="text-white/70 mb-4">Bewerk de gegevens van {editingLead.name}</p>
+                <p className="text-gray-600 mb-4">Bewerk de gegevens van {editingLead.name}</p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">Status</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                     <select
                       value={editingLead.status}
                       onChange={(e) => {
@@ -2043,16 +2068,13 @@ export default function CustomerLeadsPage() {
                           }
                         }
                       }}
-                      className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                     >
-                      <option value="new">🆕 Nieuw</option>
-                      <option value="contacted">📞 Gecontacteerd</option>
-                      <option value="qualified">⭐ Gekwalificeerd</option>
-                      <option value="proposal">📄 Voorstel</option>
-                      <option value="negotiation">🤝 Onderhandeling</option>
-                      <option value="converted">✅ Geconverteerd</option>
-                      <option value="geclosed">💰 Geclosed</option>
-                      <option value="lost">❌ Verloren</option>
+                      {customStages.map(stage => (
+                        <option key={stage.id} value={stage.id}>
+                          {stage.icon} {stage.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="flex justify-end">
@@ -2085,19 +2107,19 @@ export default function CustomerLeadsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-gradient-to-br from-purple-900/90 to-blue-900/90 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/20"
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             >
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold text-white">Nieuwe Lead Toevoegen</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">Nieuwe Lead Toevoegen</h3>
                   <button
                     onClick={() => setShowAddForm(false)}
-                    className="text-white/50 hover:text-white/70"
+                    className="text-gray-400 hover:text-gray-600"
                   >
                     ✕
                   </button>
                 </div>
-                <p className="text-white/70 mb-6">Voeg handmatig een nieuwe lead toe aan je leadportaal</p>
+                <p className="text-gray-600 mb-6">Voeg handmatig een nieuwe lead toe aan je leadportaal</p>
                 
                 <form onSubmit={async (e) => {
                   e.preventDefault();
@@ -2184,21 +2206,21 @@ export default function CustomerLeadsPage() {
                 }} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Naam *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Naam *</label>
                       <input
                         type="text"
                         name="name"
                         required
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="Volledige naam"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">E-mail</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
                       <input
                         type="email"
                         name="email"
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="email@voorbeeld.nl"
                       />
                     </div>
@@ -2206,20 +2228,20 @@ export default function CustomerLeadsPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Telefoon</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Telefoon</label>
                       <input
                         type="tel"
                         name="phone"
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="06-12345678"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Bedrijf</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Bedrijf</label>
                       <input
                         type="text"
                         name="company"
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="Bedrijfsnaam"
                       />
                     </div>
@@ -2227,20 +2249,20 @@ export default function CustomerLeadsPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Adres</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Adres</label>
                       <input
                         type="text"
                         name="address"
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="Straat en huisnummer"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Plaats</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Plaats</label>
                       <input
                         type="text"
                         name="city"
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="Stad"
                       />
                     </div>
@@ -2248,19 +2270,19 @@ export default function CustomerLeadsPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Interesse</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Interesse</label>
                       <input
                         type="text"
                         name="interest"
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="Wat is de interesse?"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Budget</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Budget</label>
                       <select
                         name="budget"
-                        className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                       >
                         <option value="">Selecteer budget</option>
                         <option value="onder €1000">Onder €1.000</option>
@@ -2273,10 +2295,10 @@ export default function CustomerLeadsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">Timeline</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Timeline</label>
                     <select
                       name="timeline"
-                      className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                     >
                       <option value="">Selecteer timeline</option>
                       <option value="binnen 1 maand">Binnen 1 maand</option>
@@ -2288,11 +2310,11 @@ export default function CustomerLeadsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">Notities</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Notities</label>
                     <textarea
                       name="notes"
                       rows={3}
-                      className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 placeholder-white/50 bg-white/5 text-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                       placeholder="Extra informatie over deze lead..."
                     />
                   </div>
@@ -2334,17 +2356,17 @@ export default function CustomerLeadsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-gradient-to-br from-purple-900/90 to-blue-900/90 backdrop-blur-xl rounded-2xl shadow-2xl max-w-lg w-full border border-white/20"
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full"
             >
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold text-white flex items-center space-x-2">
+                  <h3 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
                     <Cog6ToothIcon className="w-7 h-7 text-brand-purple" />
                     <span>Leadportaal instellingen</span>
                   </h3>
                   <button
                     onClick={() => setShowSettings(false)}
-                    className="text-white/50 hover:text-white/70 text-2xl"
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
                   >
                     ✕
                   </button>
@@ -2352,23 +2374,23 @@ export default function CustomerLeadsPage() {
 
                 {/* Email Notifications Section */}
                 <div className="space-y-6">
-                  <div className="border-b border-white/10 pb-4">
-                    <h4 className="text-lg font-semibold text-white mb-2 flex items-center space-x-2">
+                  <div className="border-b border-gray-200 pb-4">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center space-x-2">
                       <BellIcon className="w-5 h-5 text-brand-purple" />
                       <span>Email notificaties</span>
                     </h4>
-                    <p className="text-sm text-white/70 mb-4">
+                    <p className="text-sm text-gray-600 mb-4">
                       Ontvang automatisch een email wanneer er nieuwe leads binnenkomen, zelfs als je het portal niet geopend hebt.
                     </p>
 
                     <div className="space-y-4">
                       {/* Enable/Disable Email Notifications */}
-                      <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                         <div className="flex-1">
-                          <label htmlFor="email-notifications-enabled" className="font-medium text-white cursor-pointer">
+                          <label htmlFor="email-notifications-enabled" className="font-medium text-gray-900 cursor-pointer">
                             Email notificaties inschakelen
                           </label>
-                          <p className="text-sm text-white/70 mt-1">
+                          <p className="text-sm text-gray-600 mt-1">
                             Krijg emails over nieuwe leads die binnenkomen
                           </p>
                         </div>
@@ -2393,10 +2415,10 @@ export default function CustomerLeadsPage() {
                       {emailNotifications.enabled && (
                         <div className="flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-200">
                           <div className="flex-1">
-                            <label htmlFor="email-new-leads" className="font-medium text-white cursor-pointer">
+                            <label htmlFor="email-new-leads" className="font-medium text-gray-900 cursor-pointer">
                               Nieuwe leads
                             </label>
-                            <p className="text-sm text-white/70 mt-1">
+                            <p className="text-sm text-gray-600 mt-1">
                               Stuur een email zodra een nieuwe lead binnenkomt
                             </p>
                           </div>
@@ -2440,7 +2462,7 @@ export default function CustomerLeadsPage() {
                     <button
                       type="button"
                       onClick={() => setShowSettings(false)}
-                      className="px-6 py-2.5 border border-white/20 text-white/80 rounded-xl hover:bg-white/10 font-medium transition-colors"
+                      className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
                     >
                       Annuleren
                     </button>

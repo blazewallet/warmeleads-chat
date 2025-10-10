@@ -1,366 +1,439 @@
 /**
- * 🎨 DRAG & DROP PIPELINE MANAGEMENT
+ * 🎨 CUSTOM PIPELINE BOARD - Pipedrive Style
  * 
- * Enterprise-grade visual pipeline met:
- * - Drag & drop lead beweging tussen stages
- * - Real-time collaboration indicators
- * - AI-suggesties voor volgende stappen
- * - Branch-specific pipeline configuratie
+ * Features:
+ * - Horizontale layout zonder scrollen
+ * - Custom stages die klanten zelf kunnen maken/verwijderen
+ * - Drag & drop tussen stages
+ * - Responsive voor alle schermformaten
  */
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, PanInfo } from 'framer-motion';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   PlusIcon,
-  ChatBubbleLeftRightIcon,
-  PhoneIcon,
-  CurrencyEuroIcon,
-  UserPlusIcon,
-  CheckCircleIcon,
-  ArrowRightIcon,
-  SparklesIcon,
-  UserIcon,
-  ClockIcon,
-  FlagIcon,
-  XCircleIcon
+  PencilIcon,
+  TrashIcon,
+  XMarkIcon,
+  CheckIcon,
+  Bars3Icon
 } from '@heroicons/react/24/outline';
 import type { Lead } from '@/lib/crmSystem';
-import { branchIntelligence, type Branch } from '@/lib/branchIntelligence';
-
-interface PipelineStage {
-  id: string;
-  name: string;
-  order: number;
-  color: string;
-  icon: React.ComponentType<any>;
-  leads: Lead[];
-  aiPrompt?: string;
-}
+import { PipelineStagesManager, type CustomStage } from '@/lib/pipelineStages';
 
 interface PipelineBoardProps {
   leads: Lead[];
-  branch?: Branch;
+  customerId: string;
   onLeadUpdate: (leadId: string, updates: Partial<Lead>) => void;
-  onStageCreate?: (name: string) => void;
+  onStagesChange?: (stages: CustomStage[]) => void;
 }
 
-export function PipelineBoard({ leads, branch = 'Thuisbatterijen', onLeadUpdate, onStageCreate }: PipelineBoardProps) {
-  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
-  const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
-  const [aiSuggestions, setAISuggestions] = useState<Record<string, string[]>>({});
-  const [isCreatingStage, setIsCreatingStage] = useState(false);
+export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange }: PipelineBoardProps) {
+  const [stagesManager] = useState(() => new PipelineStagesManager(customerId));
+  const [stages, setStages] = useState<CustomStage[]>([]);
+  const [isAddingStage, setIsAddingStage] = useState(false);
+  const [editingStage, setEditingStage] = useState<string | null>(null);
   const [newStageName, setNewStageName] = useState('');
-  const newStageInputRef = useRef<HTMLInputElement>(null);
+  const [editStageName, setEditStageName] = useState('');
+  const [selectedEmoji, setSelectedEmoji] = useState('📋');
+  const [selectedColor, setSelectedColor] = useState('bg-gray-500');
 
-  // Initialize pipeline stages
+  // Available emojis for stages
+  const availableEmojis = ['🆕', '📞', '💬', '📄', '💰', '✅', '🤝', '📊', '🎯', '⭐', '🚀', '💡', '📈', '🔥', '💪', '👍'];
+  
+  // Available colors
+  const availableColors = [
+    { name: 'Blauw', class: 'bg-blue-500' },
+    { name: 'Groen', class: 'bg-green-500' },
+    { name: 'Geel', class: 'bg-yellow-500' },
+    { name: 'Rood', class: 'bg-red-500' },
+    { name: 'Paars', class: 'bg-purple-500' },
+    { name: 'Roze', class: 'bg-pink-500' },
+    { name: 'Indigo', class: 'bg-indigo-500' },
+    { name: 'Oranje', class: 'bg-orange-500' },
+    { name: 'Grijs', class: 'bg-gray-500' }
+  ];
+
+  // Load stages on mount
   useEffect(() => {
-    const defaultStages: PipelineStage[] = [
-      {
-        id: 'new',
-        name: 'Nieuwe Leads',
-        order: 0,
-        color: 'bg-blue-500',
-        icon: PlusIcon,
-        leads: leads.filter(lead => lead.status === 'new')
-      },
-      {
-        id: 'contacted',
-        name: 'Eerste Contact',
-        order: 1,
-        color: 'bg-yellow-500',
-        icon: ChatBubbleLeftRightIcon,
-        leads: leads.filter(lead => lead.status === 'contacted'),
-        aiPrompt: `Genereer eerste contact script voor ${branch} lead`
-      },
-      {
-        id: 'qualified',
-        name: 'Gesprek',
-        order: 2,
-        color: 'bg-orange-500',
-        icon: PhoneIcon,
-        leads: leads.filter(lead => lead.status === 'qualified'),
-        aiPrompt: `Vraag de juiste kwalificatie vragen voor ${branch}`
-      },
-      {
-        id: 'proposal',
-        name: 'Offer Opgemaakt',
-        order: 3,
-        color: 'bg-purple-500',
-        icon: CurrencyEuroIcon,
-        leads: leads.filter(lead => lead.status === 'proposal'),
-        aiPrompt: `Maak gepersonaliseerd offer voor ${branch} klant`
-      },
-      {
-        id: 'negotiation',
-        name: 'Onderhandeling',
-        order: 4,
-        color: 'bg-red-500',
-        icon: UserPlusIcon,
-        leads: leads.filter(lead => lead.status === 'negotiation'),
-        aiPrompt: `Onthul onderhandeling mogelijkheden voor ${branch}`
-      },
-      {
-        id: 'converted',
-        name: 'Geconverteerd',
-        order: 5,
-        color: 'bg-green-500',
-        icon: CheckCircleIcon,
-        leads: leads.filter(lead => lead.status === 'converted')
-      },
-      {
-        id: 'geclosed',
-        name: 'Geclosed',
-        order: 6,
-        color: 'bg-emerald-500',
-        icon: CurrencyEuroIcon,
-        leads: leads.filter(lead => lead.status === 'geclosed')
-      },
-      {
-        id: 'lost',
-        name: 'Verloren',
-        order: 7,
-        color: 'bg-red-500',
-        icon: XCircleIcon,
-        leads: leads.filter(lead => lead.status === 'lost')
-      }
-    ];
+    const loadedStages = stagesManager.getStages();
+    setStages(loadedStages);
+    onStagesChange?.(loadedStages);
+  }, [customerId]);
 
-    setPipelineStages(defaultStages);
-  }, [leads, branch]);
-
-  // Generate AI suggestions for each stage
-  useEffect(() => {
-    const suggestions: Record<string, string[]> = {};
+  // Group leads by stage
+  const leadsByStage = useMemo(() => {
+    const grouped: Record<string, Lead[]> = {};
     
-    pipelineStages.forEach(stage => {
-      if (stage.aiPrompt) {
-        suggestions[stage.id] = branchIntelligence.getBranchRecommendations(branch);
-      }
+    stages.forEach(stage => {
+      grouped[stage.id] = leads.filter(lead => {
+        // Map lead status to stage ID
+        const mappedStageId = stagesManager.mapStatusToStageId(lead.status);
+        return mappedStageId === stage.id;
+      });
     });
     
-    setAISuggestions(suggestions);
-  }, [pipelineStages, branch]);
+    return grouped;
+  }, [leads, stages]);
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
     const { destination, source, draggableId } = result;
 
     if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    if (destination.droppableId === source.droppableId && destination.index === source.index) {
-      return;
-    }
+    const leadId = draggableId;
+    const newStageId = destination.droppableId;
 
-    // Find the lead being moved
-    const lead = leads.find(l => l.id === draggableId);
-    if (!lead) return;
-
-    // Map pipeline stage IDs to lead status
-    const stageToStatusMap: Record<string, Lead['status']> = {
-      'new': 'new',
-      'contacted': 'contacted', 
-      'qualified': 'qualified',
-      'proposal': 'proposal',
-      'negotiation': 'negotiation',
-      'closed-won': 'converted'
-    };
-
-    const newStatus = stageToStatusMap[destination.droppableId];
-    if (newStatus && newStatus !== lead.status) {
-      console.log(`🔄 Moving lead ${lead.name} from ${lead.status} to ${newStatus}`);
-      onLeadUpdate(lead.id, { status: newStatus });
-    }
+    // Update lead with new stage (we'll store stage ID in a custom field)
+    onLeadUpdate(leadId, {
+      status: newStageId as any, // Store stage ID as status for now
+      updatedAt: new Date()
+    });
   };
 
-  // Create new stage
-  const handleCreateStage = () => {
-    if (newStageName.trim() && onStageCreate) {
-      onStageCreate(newStageName.trim());
-      setNewStageName('');
-      setIsCreatingStage(false);
+  // Add new stage
+  const handleAddStage = () => {
+    if (!newStageName.trim()) return;
+    
+    const newStage = stagesManager.addStage(newStageName.trim(), selectedColor, selectedEmoji);
+    const updatedStages = stagesManager.getStages();
+    setStages(updatedStages);
+    onStagesChange?.(updatedStages);
+    
+    // Reset form
+    setNewStageName('');
+    setSelectedEmoji('📋');
+    setSelectedColor('bg-gray-500');
+    setIsAddingStage(false);
+  };
+
+  // Update stage
+  const handleUpdateStage = (stageId: string) => {
+    if (!editStageName.trim()) return;
+    
+    stagesManager.updateStage(stageId, { name: editStageName.trim() });
+    const updatedStages = stagesManager.getStages();
+    setStages(updatedStages);
+    onStagesChange?.(updatedStages);
+    setEditingStage(null);
+  };
+
+  // Delete stage
+  const handleDeleteStage = (stageId: string) => {
+    const stage = stages.find(s => s.id === stageId);
+    if (!stage) return;
+    
+    if (stage.isDefault) {
+      alert('Default fases kunnen niet worden verwijderd');
+      return;
     }
+    
+    const leadsInStage = leadsByStage[stageId] || [];
+    if (leadsInStage.length > 0) {
+      if (!confirm(`Deze fase bevat ${leadsInStage.length} lead(s). Weet je zeker dat je deze fase wilt verwijderen?`)) {
+        return;
+      }
+    }
+    
+    stagesManager.deleteStage(stageId);
+    const updatedStages = stagesManager.getStages();
+    setStages(updatedStages);
+    onStagesChange?.(updatedStages);
   };
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-2">{branch} Pipeline</h2>
-          <p className="text-white/70">Sleep leads tussen fases voor optimale workflow</p>
-        </div>
-        
-        <div className="flex items-center space-x-3">
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Pipeline Header */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Pipeline Overzicht</h3>
+            <p className="text-sm text-gray-600 mt-1">{leads.length} leads in totaal</p>
+          </div>
           <button
-            onClick={() => setIsCreatingStage(true)}
-            className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm"
+            onClick={() => setIsAddingStage(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-brand-purple text-white rounded-lg hover:bg-brand-purple/90 transition-colors"
           >
             <PlusIcon className="w-4 h-4" />
-            <span>Nieuwe Fase</span>
+            <span>Nieuwe fase</span>
           </button>
         </div>
       </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex space-x-6 overflow-x-auto pb-6 px-2">
-          <AnimatePresence>
-            {pipelineStages
-              .sort((a, b) => a.order - b.order)
-              .map((stage, index) => (
-                <div key={stage.id} className="flex-shrink-0 w-72 md:w-80">
-                  <Droppable droppableId={stage.id}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={`rounded-2xl p-4 min-h-[500px] md:min-h-[600px] transition-all duration-200 ${
-                          snapshot.isDraggingOver 
-                            ? 'bg-white/20 border-2 border-dashed border-white/50' 
-                            : 'bg-white/10 border border-white/20'
-                        }`}
-                      >
-                        {/* Stage Header */}
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-8 h-8 ${stage.color} rounded-lg flex items-center justify-center`}>
-                              <stage.icon className="w-4 h-4 text-white" />
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-white">{stage.name}</h3>
-                              <span className="text-xs text-white/60">{stage.leads.length} leads</span>
-                            </div>
-                          </div>
-                          
-                          {aiSuggestions[stage.id] && (
-                            <SparklesIcon className="w-5 h-5 text-purple-400" />
+      {/* Pipeline Stages - Horizontale layout */}
+      <div className="flex-1 overflow-hidden">
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="h-full flex gap-4 p-6">
+            {stages.map((stage, index) => (
+              <div
+                key={stage.id}
+                className="flex-1 min-w-[280px] max-w-[350px] flex flex-col"
+                style={{ flex: `1 1 ${100 / stages.length}%` }}
+              >
+                {/* Stage Header */}
+                <div className={`${stage.color} rounded-t-xl px-4 py-3 text-white`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-2xl">{stage.icon}</span>
+                      {editingStage === stage.id ? (
+                        <input
+                          type="text"
+                          value={editStageName}
+                          onChange={(e) => setEditStageName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleUpdateStage(stage.id);
+                            if (e.key === 'Escape') setEditingStage(null);
+                          }}
+                          className="px-2 py-1 text-sm rounded border-2 border-white text-gray-900 focus:outline-none"
+                          autoFocus
+                        />
+                      ) : (
+                        <h4 className="font-semibold text-base">{stage.name}</h4>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-1">
+                      {editingStage === stage.id ? (
+                        <>
+                          <button
+                            onClick={() => handleUpdateStage(stage.id)}
+                            className="p-1 hover:bg-white/20 rounded"
+                          >
+                            <CheckIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setEditingStage(null)}
+                            className="p-1 hover:bg-white/20 rounded"
+                          >
+                            <XMarkIcon className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingStage(stage.id);
+                              setEditStageName(stage.name);
+                            }}
+                            className="p-1 hover:bg-white/20 rounded"
+                            title="Naam aanpassen"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          {!stage.isDefault && (
+                            <button
+                              onClick={() => handleDeleteStage(stage.id)}
+                              className="p-1 hover:bg-white/20 rounded"
+                              title="Fase verwijderen"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
                           )}
-                        </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-sm opacity-90">
+                    {leadsByStage[stage.id]?.length || 0} leads
+                  </div>
+                </div>
 
-                        {/* AI Suggestions */}
-                        {aiSuggestions[stage.id] && (
-                          <div className="mb-4 p-3 bg-purple-500/20 rounded-lg border border-purple-400/30">
-                            <h4 className="text-sm font-medium text-purple-300 mb-2">AI Suggesties:</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {aiSuggestions[stage.id].slice(0, 3).map((suggestion, idx) => (
-                                <span key={idx} className="text-xs bg-purple-600/30 text-purple-200 px-2 py-1 rounded">
-                                  {suggestion}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Leads */}
-                        <div className="space-y-3">
-                          <AnimatePresence>
-                            {stage.leads.map((lead, index) => (
-                              <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
-                                    className={`p-3 rounded-xl cursor-move transition-all ${
-                                      snapshot.isDragging 
-                                        ? 'bg-white shadow-lg shadow-black/25' 
-                                        : 'bg-white/5 hover:bg-white/10 border border-white/10'
-                                    }`}
-                                  >
-                                    <div className="space-y-2">
-                                      {/* Lead Header */}
-                                      <div className="flex items-center justify-between">
-                                        <div className="font-medium text-white">
-                                          {lead.name}
-                                        </div>
-                                        <div className="flex items-center space-x-1 text-xs text-white/60">
-                                          <FlagIcon className="w-3 h-3" />
-                                          <span>{branchIntelligence.detectBranch(lead).confidence}%</span>
-                                        </div>
-                                      </div>
-
-                                      {/* Lead Details */}
-                                      <div className="space-y-1 text-xs text-white/70">
-                                        <div className="flex items-center space-x-2">
-                                          <UserIcon className="w-3 h-3" />
-                                          <span>{lead.email}</span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                          <PhoneIcon className="w-3 h-3" />
-                                          <span>{lead.phone || 'Geen telefoon'}</span>
-                                        </div>
-                                        {lead.budget && (
-                                          <div className="flex items-center space-x-2">
-                                            <CurrencyEuroIcon className="w-3 h-3" />
-                                            <span>Budget: {lead.budget}</span>
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Timeline */}
-                                      <div className="flex items-center space-x-2 text-xs text-white/50">
-                                        <ClockIcon className="w-3 h-3" />
-                                        <span>
-                                          {lead.createdAt 
-                                            ? new Date(lead.createdAt).toLocaleDateString('nl-NL')
-                                            : 'N.v.t.'
-                                          }
-                                        </span>
-                                      </div>
-                                    </div>
+                {/* Stage Content - Droppable */}
+                <Droppable droppableId={stage.id}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`flex-1 bg-gray-100 rounded-b-xl p-3 overflow-y-auto ${
+                        snapshot.isDraggingOver ? 'bg-blue-50 ring-2 ring-blue-300' : ''
+                      }`}
+                      style={{ minHeight: '400px', maxHeight: 'calc(100vh - 300px)' }}
+                    >
+                      <div className="space-y-2">
+                        {(leadsByStage[stage.id] || []).map((lead, index) => (
+                          <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                className={`bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-move ${
+                                  snapshot.isDragging ? 'ring-2 ring-brand-purple shadow-lg' : ''
+                                }`}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <h5 className="font-semibold text-gray-900 text-sm flex-1 pr-2">
+                                    {lead.name}
+                                  </h5>
+                                  <Bars3Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                </div>
+                                
+                                {lead.company && (
+                                  <p className="text-xs text-gray-600 mb-2">{lead.company}</p>
+                                )}
+                                
+                                <div className="text-xs text-gray-500 space-y-1">
+                                  {lead.email && (
+                                    <div className="truncate">📧 {lead.email}</div>
+                                  )}
+                                  {lead.phone && (
+                                    <div>📱 {lead.phone}</div>
+                                  )}
+                                </div>
+                                
+                                {lead.budget && (
+                                  <div className="mt-2 pt-2 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-green-600">
+                                      💰 {lead.budget}
+                                    </span>
                                   </div>
                                 )}
-                              </Draggable>
-                            ))}
-                          </AnimatePresence>
-                          
-                          {provided.placeholder}
-                        </div>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                        
+                        {(!leadsByStage[stage.id] || leadsByStage[stage.id].length === 0) && (
+                          <div className="text-center py-8 text-gray-400 text-sm">
+                            Sleep leads hierheen
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </Droppable>
-                </div>
-              ))}
-          </AnimatePresence>
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            ))}
+          </div>
+        </DragDropContext>
+      </div>
 
-          {/* Create New Stage */}
-          {isCreatingStage && (
-            <div className="flex-shrink-0 w-80 bg-white/5 border-2 border-dashed border-white/30 rounded-2xl p-4">
+      {/* Add Stage Modal */}
+      <AnimatePresence>
+        {isAddingStage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setIsAddingStage(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-900">Nieuwe fase toevoegen</h3>
+                <button
+                  onClick={() => setIsAddingStage(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+
               <div className="space-y-4">
-                <h3 className="font-medium text-white">Nieuwe Fase</h3>
-                <input
-                  ref={newStageInputRef}
-                  type="text"
-                  value={newStageName}
-                  onChange={(e) => setNewStageName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateStage()}
-                  placeholder="Fase naam..."
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  autoFocus
-                />
-                <div className="flex space-x-2">
+                {/* Stage Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fase naam
+                  </label>
+                  <input
+                    type="text"
+                    value={newStageName}
+                    onChange={(e) => setNewStageName(e.target.value)}
+                    placeholder="Bijv. 'Demo gepland'"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Emoji Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Icoon
+                  </label>
+                  <div className="grid grid-cols-8 gap-2">
+                    {availableEmojis.map(emoji => (
+                      <button
+                        key={emoji}
+                        onClick={() => setSelectedEmoji(emoji)}
+                        className={`text-2xl p-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                          selectedEmoji === emoji ? 'bg-brand-purple/10 ring-2 ring-brand-purple' : ''
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Color Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Kleur
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableColors.map(color => (
+                      <button
+                        key={color.class}
+                        onClick={() => setSelectedColor(color.class)}
+                        className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 transition-all ${
+                          selectedColor === color.class
+                            ? 'border-brand-purple bg-gray-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full ${color.class}`} />
+                        <span className="text-sm text-gray-700">{color.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div className="pt-4 border-t border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Voorbeeld
+                  </label>
+                  <div className={`${selectedColor} rounded-lg px-4 py-3 text-white`}>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-2xl">{selectedEmoji}</span>
+                      <span className="font-semibold">{newStageName || 'Nieuwe fase'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex space-x-3 pt-4">
                   <button
-                    onClick={handleCreateStage}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg py-2 text-sm font-medium transition-colors"
-                  >
-                    Aanmaken
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsCreatingStage(false);
-                      setNewStageName('');
-                    }}
-                    className="flex-1 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    onClick={() => setIsAddingStage(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Annuleren
                   </button>
+                  <button
+                    onClick={handleAddStage}
+                    disabled={!newStageName.trim()}
+                    className="flex-1 px-4 py-2 bg-brand-purple text-white rounded-lg hover:bg-brand-purple/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Toevoegen
+                  </button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </DragDropContext>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
