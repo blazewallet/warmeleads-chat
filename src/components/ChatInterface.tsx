@@ -247,7 +247,7 @@ export function ChatInterface({ entryPoint = 'direct', onBackToHome, onShowAccou
         
         // Resolve options if they are a function
         const resolvedOptions = typeof nextMessage.options === 'function' 
-          ? nextMessage.options(userProfile) 
+          ? (nextMessage.options as any)(userProfile) 
           : nextMessage.options;
         
         const lisaResponse: Message = {
