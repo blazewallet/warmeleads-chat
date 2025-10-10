@@ -17,7 +17,7 @@ interface ChatStep {
   id: string;
   trigger?: string;
   message: string | ((profile: UserProfile) => string);
-  options?: string[];
+  options?: string[] | ((profile: UserProfile) => string[]);
   nextStep?: string | ((response: string, profile: UserProfile) => string);
   action?: (response: string, profile: UserProfile) => void;
   delay?: number;
