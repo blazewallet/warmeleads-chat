@@ -193,7 +193,7 @@ export default function CustomerLeadsPage() {
         if (data.success && data.customerData) {
           customer = data.customerData;
           console.log('✅ Leads Portal: Customer data fetched from Blob Storage');
-          console.log('  googleSheetUrl:', customer.googleSheetUrl);
+          console.log('  googleSheetUrl:', customer?.googleSheetUrl);
         } else if (data.customer) {
           customer = data.customer;
           console.log('✅ Leads Portal: Customer data fetched (legacy structure)');
