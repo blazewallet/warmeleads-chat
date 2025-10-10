@@ -53,7 +53,15 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
         throw new Error('No customerId provided');
       }
       
-      const response = await fetch(`/api/whatsapp/config?customerId=${customerId}`);
+      // Add cache-busting timestamp to prevent browser caching
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/whatsapp/config?customerId=${customerId}&_t=${timestamp}`, {
+        cache: 'no-store', // Disable browser caching
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
       console.log(`📡 WhatsApp config response status: ${response.status}`);
       console.log(`📡 WhatsApp config response headers:`, response.headers);
       
@@ -62,7 +70,7 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
         console.log(`✅ WhatsApp config response data:`, data);
         
         if (data.config) {
-          console.log(`✅ WhatsApp config loaded:`, data.config);
+          console.log(`✅ WhatsApp config loaded - enabled: ${data.config.enabled}, type: ${typeof data.config.enabled}`);
           setConfig(data.config);
         } else {
           console.error('❌ No config in response:', data);
@@ -134,11 +142,9 @@ export function WhatsAppSettings({ customerId, isOpen, onClose }: WhatsAppSettin
           businessName: result.config?.businessName 
         });
         
-        // Update local state with the saved config to ensure consistency
-        if (result.config) {
-          setConfig(result.config);
-          console.log('✅ Local state updated with saved config:', { enabled: result.config.enabled });
-        }
+        // Reload config from server to ensure we have the latest state
+        console.log('🔄 Reloading config from server to verify...');
+        await loadConfig();
         
         alert('✅ WhatsApp configuratie opgeslagen!');
       } else if (response.status === 402) {
