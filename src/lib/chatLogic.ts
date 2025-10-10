@@ -17,7 +17,7 @@ interface ChatStep {
   id: string;
   trigger?: string;
   message: string | ((profile: UserProfile) => string);
-  options?: string[] | ((profile: UserProfile) => string[]);
+  options?: string[];
   nextStep?: string | ((response: string, profile: UserProfile) => string);
   action?: (response: string, profile: UserProfile) => void;
   delay?: number;
@@ -898,6 +898,20 @@ Welke optie spreekt u aan?`;
     nextStep: (response) => {
       if (response === 'Ja, nieuwe leads bestellen') return 'express_welcome';
       return 'complaint_process';
+    },
+  },
+
+  // Quantity selection
+  quantity_selection: {
+    id: 'quantity_selection',
+    message: 'Hoeveel leads wilt u bestellen?',
+    options: ['30 leads', '50 leads', '75 leads', '100+ leads', 'Terug naar opties'],
+    nextStep: (response) => {
+      if (response === 'Terug naar opties') return 'test_order';
+      return 'order_process';
+    },
+    action: (response, profile) => {
+      profile.quantity = response;
     },
   },
 
