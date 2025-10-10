@@ -40,6 +40,9 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
   const [editStageName, setEditStageName] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📋');
   const [selectedColor, setSelectedColor] = useState('bg-gray-500');
+  
+  // Local state for optimistic updates during drag
+  const [optimisticLeads, setOptimisticLeads] = useState<Lead[]>([]);
 
   // Available emojis for stages
   const availableEmojis = ['🆕', '📞', '💬', '📄', '💰', '✅', '🤝', '📊', '🎯', '⭐', '🚀', '💡', '📈', '🔥', '💪', '👍'];
@@ -63,21 +66,30 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
     setStages(loadedStages);
     onStagesChange?.(loadedStages);
   }, [customerId]);
+  
+  // Sync optimistic leads with actual leads
+  useEffect(() => {
+    setOptimisticLeads(leads);
+  }, [leads]);
 
-  // Group leads by stage
+  // Group leads by stage - use optimistic leads for instant updates
   const leadsByStage = useMemo(() => {
     const grouped: Record<string, Lead[]> = {};
     
     stages.forEach(stage => {
-      grouped[stage.id] = leads.filter(lead => {
-        // Map lead status to stage ID
+      grouped[stage.id] = optimisticLeads.filter(lead => {
+        // Check if lead status matches stage ID directly
+        if (lead.status === stage.id) {
+          return true;
+        }
+        // Fallback: Map old status to stage ID for backwards compatibility
         const mappedStageId = stagesManager.mapStatusToStageId(lead.status);
         return mappedStageId === stage.id;
       });
     });
     
     return grouped;
-  }, [leads, stages]);
+  }, [optimisticLeads, stages]);
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
@@ -89,9 +101,20 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
     const leadId = draggableId;
     const newStageId = destination.droppableId;
 
-    // Update lead with new stage (we'll store stage ID in a custom field)
+    console.log('🎯 Drag & Drop:', { leadId, from: source.droppableId, to: newStageId });
+
+    // Optimistic update - update local state immediately
+    setOptimisticLeads(prevLeads => 
+      prevLeads.map(lead => 
+        lead.id === leadId 
+          ? { ...lead, status: newStageId as any, updatedAt: new Date() }
+          : lead
+      )
+    );
+
+    // Update parent component (will update backend/sheet)
     onLeadUpdate(leadId, {
-      status: newStageId as any, // Store stage ID as status for now
+      status: newStageId as any,
       updatedAt: new Date()
     });
   };
