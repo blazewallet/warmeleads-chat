@@ -168,18 +168,22 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
       {/* Pipeline Stages - Horizontale layout */}
       <div className="flex-1 overflow-hidden">
         <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="h-full flex gap-4 p-6">
+          <div className="h-full flex gap-3 p-4">
             {stages.map((stage, index) => (
               <div
                 key={stage.id}
-                className="flex-1 min-w-[280px] max-w-[350px] flex flex-col"
-                style={{ flex: `1 1 ${100 / stages.length}%` }}
+                className="flex flex-col"
+                style={{ 
+                  flex: `1 1 ${100 / stages.length}%`,
+                  minWidth: 0,
+                  maxWidth: `calc(${100 / stages.length}% - ${(stages.length - 1) * 12 / stages.length}px)`
+                }}
               >
                 {/* Stage Header */}
-                <div className={`${stage.color} rounded-t-xl px-4 py-3 text-white`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-2xl">{stage.icon}</span>
+                <div className={`${stage.color} rounded-t-xl px-3 py-2 text-white`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-xl">{stage.icon}</span>
                       {editingStage === stage.id ? (
                         <input
                           type="text"
@@ -189,11 +193,11 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
                             if (e.key === 'Enter') handleUpdateStage(stage.id);
                             if (e.key === 'Escape') setEditingStage(null);
                           }}
-                          className="px-2 py-1 text-sm rounded border-2 border-white text-gray-900 focus:outline-none"
+                          className="px-2 py-0.5 text-xs rounded border-2 border-white text-gray-900 focus:outline-none w-full"
                           autoFocus
                         />
                       ) : (
-                        <h4 className="font-semibold text-base">{stage.name}</h4>
+                        <h4 className="font-semibold text-sm truncate">{stage.name}</h4>
                       )}
                     </div>
                     
@@ -238,7 +242,7 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
                       )}
                     </div>
                   </div>
-                  <div className="text-sm opacity-90">
+                  <div className="text-xs opacity-90">
                     {leadsByStage[stage.id]?.length || 0} leads
                   </div>
                 </div>
@@ -249,10 +253,10 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex-1 bg-gray-100 rounded-b-xl p-3 overflow-y-auto ${
+                      className={`flex-1 bg-gray-100 rounded-b-xl p-2 overflow-y-auto ${
                         snapshot.isDraggingOver ? 'bg-blue-50 ring-2 ring-blue-300' : ''
                       }`}
-                      style={{ minHeight: '400px', maxHeight: 'calc(100vh - 300px)' }}
+                      style={{ minHeight: '300px', maxHeight: 'calc(100vh - 280px)' }}
                     >
                       <div className="space-y-2">
                         {(leadsByStage[stage.id] || []).map((lead, index) => (
@@ -262,33 +266,33 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                className={`bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-move ${
+                                className={`bg-white rounded-lg p-2 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-move ${
                                   snapshot.isDragging ? 'ring-2 ring-brand-purple shadow-lg' : ''
                                 }`}
                               >
-                                <div className="flex items-start justify-between mb-2">
-                                  <h5 className="font-semibold text-gray-900 text-sm flex-1 pr-2">
+                                <div className="flex items-start justify-between mb-1">
+                                  <h5 className="font-semibold text-gray-900 text-xs flex-1 pr-1 leading-tight">
                                     {lead.name}
                                   </h5>
-                                  <Bars3Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                  <Bars3Icon className="w-3 h-3 text-gray-400 flex-shrink-0 mt-0.5" />
                                 </div>
                                 
                                 {lead.company && (
-                                  <p className="text-xs text-gray-600 mb-2">{lead.company}</p>
+                                  <p className="text-[10px] text-gray-600 mb-1.5 truncate">{lead.company}</p>
                                 )}
                                 
-                                <div className="text-xs text-gray-500 space-y-1">
+                                <div className="text-[10px] text-gray-500 space-y-0.5">
                                   {lead.email && (
                                     <div className="truncate">📧 {lead.email}</div>
                                   )}
                                   {lead.phone && (
-                                    <div>📱 {lead.phone}</div>
+                                    <div className="truncate">📱 {lead.phone}</div>
                                   )}
                                 </div>
                                 
                                 {lead.budget && (
-                                  <div className="mt-2 pt-2 border-t border-gray-100">
-                                    <span className="text-xs font-medium text-green-600">
+                                  <div className="mt-1.5 pt-1.5 border-t border-gray-100">
+                                    <span className="text-[10px] font-medium text-green-600 truncate block">
                                       💰 {lead.budget}
                                     </span>
                                   </div>
