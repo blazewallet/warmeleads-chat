@@ -9,6 +9,37 @@ function isBlobStorageConfigured(): boolean {
   return !!process.env.BLOB_READ_WRITE_TOKEN;
 }
 
+// Recursively convert all Date objects to ISO strings for JSON serialization
+function serializeDates(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  // Handle Date objects
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+  
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => serializeDates(item));
+  }
+  
+  // Handle objects
+  if (typeof obj === 'object') {
+    const serialized: any = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        serialized[key] = serializeDates(obj[key]);
+      }
+    }
+    return serialized;
+  }
+  
+  // Primitive types (string, number, boolean)
+  return obj;
+}
+
 // GET: Haal customer data op uit Blob Storage (alle customers of specifieke customer)
 export async function GET(request: NextRequest) {
   try {
@@ -232,8 +263,11 @@ export async function POST(request: NextRequest) {
       console.log('ℹ️ No existing blob found, creating new one');
     }
 
+    // Serialize Date objects before JSON.stringify to prevent serialization errors
+    const serializedData = serializeDates(dataToStore);
+
     // Write new blob
-    const blob = await put(blobName, JSON.stringify(dataToStore), {
+    const blob = await put(blobName, JSON.stringify(serializedData), {
       access: 'public',
       addRandomSuffix: false,
       contentType: 'application/json'

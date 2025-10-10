@@ -23,20 +23,56 @@ export class GoogleSheetsService {
     }
   }
 
-  // Read data from Google Sheets
+  // Read data from Google Sheets using Service Account (primary) or API key (fallback)
   async readSheet(spreadsheetId: string, range: string = 'Sheet1!A1:K1000'): Promise<any[][]> {
-    if (!this.apiKey) {
-      throw new Error('Google Sheets API key not configured');
-    }
-
     try {
+      console.log('🔄 Reading Google Sheet with Service Account:', { 
+        spreadsheetId: spreadsheetId.substring(0, 10) + '...', 
+        range
+      });
+      
+      // Try Service Account first (more reliable, no restrictions)
+      try {
+        const tokenResponse = await fetch('/api/sheets-auth');
+        if (tokenResponse.ok) {
+          const { access_token } = await tokenResponse.json();
+          
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+          
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${access_token}`,
+              'Accept': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            
+            console.log('✅ Google Sheets data loaded via Service Account:', {
+              rows: data.values?.length || 0,
+              columns: data.values?.[0]?.length || 0,
+              firstRow: data.values?.[0] || 'No data'
+            });
+
+            return data.values || [];
+          }
+          
+          console.warn('⚠️ Service Account read failed, trying API key fallback...');
+        }
+      } catch (serviceAccountError) {
+        console.warn('⚠️ Service Account not available, trying API key fallback:', serviceAccountError);
+      }
+
+      // Fallback to API key (for backward compatibility)
+      if (!this.apiKey) {
+        throw new Error('Google Sheets API key not configured and Service Account unavailable');
+      }
+
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${this.apiKey}`;
       
-      console.log('🔄 Reading Google Sheet:', { 
-        spreadsheetId: spreadsheetId.substring(0, 10) + '...', 
-        range,
-        apiKey: this.apiKey.substring(0, 10) + '...'
-      });
+      console.log('🔄 Reading Google Sheet with API key fallback');
       
       const response = await fetch(url, {
         method: 'GET',
@@ -51,13 +87,13 @@ export class GoogleSheetsService {
           status: response.status,
           statusText: response.statusText,
           error: errorText,
-          url: url.substring(0, 100) + '...' // Log partial URL for debugging
+          url: url.substring(0, 100) + '...'
         });
         
         if (response.status === 400) {
           throw new Error('Ongeldige API key of spreadsheet configuratie. Controleer de Google Sheets API key en spreadsheet toegang.');
         } else if (response.status === 403) {
-          throw new Error('Geen toegang tot spreadsheet. Zorg dat de sheet publiek toegankelijk is.');
+          throw new Error('Geen toegang tot spreadsheet. Zorg dat de sheet publiek toegankelijk is of deel met warmeleads-sheets-reader@warmeleads-spreadsheet-api.iam.gserviceaccount.com');
         } else if (response.status === 404) {
           throw new Error('Spreadsheet niet gevonden. Controleer de URL.');
         } else {
@@ -67,7 +103,7 @@ export class GoogleSheetsService {
 
       const data = await response.json();
       
-      console.log('✅ Google Sheets data loaded:', {
+      console.log('✅ Google Sheets data loaded via API key fallback:', {
         rows: data.values?.length || 0,
         columns: data.values?.[0]?.length || 0,
         firstRow: data.values?.[0] || 'No data'
@@ -266,22 +302,58 @@ export class GoogleSheetsService {
     return null;
   }
 
-  // Write data back to Google Sheets
+  // Write data back to Google Sheets using Service Account (primary) or API key (fallback)
   async updateSheet(spreadsheetId: string, range: string, values: any[][]): Promise<boolean> {
-    if (!this.apiKey) {
-      throw new Error('Google Sheets API key not configured');
-    }
-
     try {
-      console.log('📝 Updating Google Sheet:', {
+      console.log('📝 Updating Google Sheet with Service Account:', {
         spreadsheetId: spreadsheetId.substring(0, 10) + '...',
         range,
         rowsToUpdate: values.length,
         firstRowData: values[0]
       });
 
-      // Use batchUpdate for better reliability
+      // Try Service Account first (has write access)
+      try {
+        const tokenResponse = await fetch('/api/sheets-auth');
+        if (tokenResponse.ok) {
+          const { access_token } = await tokenResponse.json();
+          
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+          
+          const response = await fetch(url, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${access_token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              values: values,
+              majorDimension: 'ROWS'
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Google Sheets update successful via Service Account:', data);
+            return true;
+          }
+          
+          const errorText = await response.text();
+          console.warn('⚠️ Service Account write failed:', errorText);
+        }
+      } catch (serviceAccountError) {
+        console.warn('⚠️ Service Account not available for write, trying API key fallback:', serviceAccountError);
+      }
+
+      // Fallback to API key (will likely fail for write, but try anyway)
+      if (!this.apiKey) {
+        throw new Error('❌ WRITE TOEGANG VEREIST: Share de spreadsheet met warmeleads-sheets-reader@warmeleads-spreadsheet-api.iam.gserviceaccount.com als Editor');
+      }
+
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED&key=${this.apiKey}`;
+      
+      console.log('🔄 Trying Google Sheet update with API key fallback');
       
       const response = await fetch(url, {
         method: 'PUT',
@@ -303,10 +375,8 @@ export class GoogleSheetsService {
           error: errorText
         });
         
-        if (response.status === 401) {
-          throw new Error('❌ GEEN WRITE TOEGANG: De huidige API key heeft alleen read permissies. Voor write access is een Service Account nodig.');
-        } else if (response.status === 403) {
-          throw new Error('❌ GEEN TOEGANG: Spreadsheet is niet publiek of API key heeft geen permissies.');
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('❌ WRITE TOEGANG VEREIST: Share de spreadsheet met warmeleads-sheets-reader@warmeleads-spreadsheet-api.iam.gserviceaccount.com als Editor');
         } else if (response.status === 404) {
           throw new Error('❌ NIET GEVONDEN: Spreadsheet of range niet gevonden.');
         } else {
@@ -315,7 +385,7 @@ export class GoogleSheetsService {
       }
 
       const data = await response.json();
-      console.log('✅ Google Sheets update successful:', data);
+      console.log('✅ Google Sheets update successful via API key fallback:', data);
       return true;
       
     } catch (error) {
@@ -324,22 +394,58 @@ export class GoogleSheetsService {
     }
   }
 
-  // Append data to Google Sheets
+  // Append data to Google Sheets using Service Account (primary) or API key (fallback)
   async appendToSheet(spreadsheetId: string, range: string, values: any[][]): Promise<boolean> {
-    if (!this.apiKey) {
-      throw new Error('Google Sheets API key not configured');
-    }
-
     try {
-      console.log('📝 Appending to Google Sheet:', {
+      console.log('📝 Appending to Google Sheet with Service Account:', {
         spreadsheetId: spreadsheetId.substring(0, 10) + '...',
         range,
         rowsToAppend: values.length,
         firstRowData: values[0]
       });
 
-      // Use append API for adding new rows
+      // Try Service Account first (has write access)
+      try {
+        const tokenResponse = await fetch('/api/sheets-auth');
+        if (tokenResponse.ok) {
+          const { access_token } = await tokenResponse.json();
+          
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`;
+          
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${access_token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              values: values,
+              majorDimension: 'ROWS'
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Google Sheets append successful via Service Account:', data);
+            return true;
+          }
+          
+          const errorText = await response.text();
+          console.warn('⚠️ Service Account append failed:', errorText);
+        }
+      } catch (serviceAccountError) {
+        console.warn('⚠️ Service Account not available for append, trying API key fallback:', serviceAccountError);
+      }
+
+      // Fallback to API key (will likely fail for write, but try anyway)
+      if (!this.apiKey) {
+        throw new Error('❌ WRITE TOEGANG VEREIST: Share de spreadsheet met warmeleads-sheets-reader@warmeleads-spreadsheet-api.iam.gserviceaccount.com als Editor');
+      }
+
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&key=${this.apiKey}`;
+      
+      console.log('🔄 Trying Google Sheet append with API key fallback');
       
       const response = await fetch(url, {
         method: 'POST',
@@ -361,10 +467,8 @@ export class GoogleSheetsService {
           error: errorText
         });
         
-        if (response.status === 401) {
-          throw new Error('❌ GEEN WRITE TOEGANG: De huidige API key heeft alleen read permissies. Voor write access is een Service Account nodig.');
-        } else if (response.status === 403) {
-          throw new Error('❌ GEEN TOEGANG: Spreadsheet is niet publiek of API key heeft geen permissies.');
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('❌ WRITE TOEGANG VEREIST: Share de spreadsheet met warmeleads-sheets-reader@warmeleads-spreadsheet-api.iam.gserviceaccount.com als Editor');
         } else if (response.status === 404) {
           throw new Error('❌ NIET GEVONDEN: Spreadsheet of range niet gevonden.');
         } else {
@@ -373,7 +477,7 @@ export class GoogleSheetsService {
       }
 
       const data = await response.json();
-      console.log('✅ Google Sheets append successful:', data);
+      console.log('✅ Google Sheets append successful via API key fallback:', data);
       return true;
       
     } catch (error) {
