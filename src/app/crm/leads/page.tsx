@@ -250,7 +250,7 @@ export default function CustomerLeadsPage() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                customerId: customer.id,
+                customerId: customer.email, // Use email as customerId for Blob Storage API
                 customerData: customer
               })
             });
@@ -320,7 +320,7 @@ export default function CustomerLeadsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerId: customerData.id,
+          customerId: customerData.email, // Use email as customerId
           preferences
         })
       });
@@ -585,7 +585,7 @@ export default function CustomerLeadsPage() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                customerId: customerData.id,
+                customerId: customerData.email, // Use email as customerId for Blob Storage API
                 customerData: updatedCustomer
               })
             });
@@ -675,7 +675,7 @@ export default function CustomerLeadsPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            customerId: customerData.id,
+            customerId: customerData.email, // Use email as customerId for Blob Storage API
             customerData: updatedCustomer
           })
         });
@@ -957,7 +957,7 @@ export default function CustomerLeadsPage() {
         <div className="h-[calc(100vh-120px)]">
           <PipelineBoard 
             leads={filteredLeads}
-            customerId={customerData?.id || user?.email || 'unknown'}
+            customerId={customerData?.email || user?.email || 'unknown'}
             onLeadUpdate={handleUpdateLead}
             onStagesChange={(stages) => {
               setCustomStages(stages);
@@ -2211,7 +2211,7 @@ export default function CustomerLeadsPage() {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                  customerId: customerData.id,
+                                  customerId: customerData.email, // Use email as customerId
                                   leadId: addedLead.id,
                                   leadName: addedLead.name,
                                   phoneNumber: addedLead.phone,
