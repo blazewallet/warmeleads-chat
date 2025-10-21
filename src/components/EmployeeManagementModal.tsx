@@ -60,21 +60,28 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     }
   }, [isOpen, user?.email]);
 
-  const loadCompanyData = async () => {
+  const loadCompanyData = async (clearMessages = true) => {
     setIsLoading(true);
     setError(null);
-    setSuccess(null);
+    if (clearMessages) {
+      setSuccess(null);
+    }
     
     try {
+      console.log('🔄 Loading company data for:', user.email);
       const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
       const data = await response.json();
       
+      console.log('🔄 Company data response:', { ok: response.ok, success: data.success, employees: data.company?.employees?.length });
+      
       if (response.ok && data.success) {
         setCompany(data.company);
+        console.log('✅ Company data loaded:', { employees: data.company?.employees });
       } else {
         setError(data.error || 'Fout bij het laden van bedrijfsgegevens');
       }
     } catch (err) {
+      console.error('❌ Error loading company data:', err);
       setError('Fout bij het laden van bedrijfsgegevens');
     } finally {
       setIsLoading(false);
@@ -144,28 +151,35 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     setSuccess(null);
 
     try {
+      console.log('🗑️ Attempting to delete employee:', { ownerEmail: user.email, employeeEmail });
+      
       const response = await fetch(
         `/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&employeeEmail=${encodeURIComponent(employeeEmail)}`,
         { method: 'DELETE' }
       );
 
+      console.log('🗑️ Delete response status:', response.status);
       const result = await response.json();
+      console.log('🗑️ Delete response result:', result);
 
       if (response.ok && result.success) {
-        // Show success message
+        // Show success message first
         setSuccess(`${employeeName} is succesvol verwijderd uit het team.`);
+        console.log('✅ Employee deletion successful, reloading data...');
         
-        // Reload company data to update the UI
-        await loadCompanyData();
+        // Reload company data to update the UI (without clearing success message)
+        await loadCompanyData(false);
         
-        // Clear success message after 3 seconds
+        // Clear success message after 5 seconds
         setTimeout(() => {
           setSuccess(null);
-        }, 3000);
+        }, 5000);
       } else {
+        console.error('❌ Delete failed:', result);
         setError(result.error || 'Fout bij het verwijderen van werknemer');
       }
     } catch (err) {
+      console.error('❌ Delete error:', err);
       setError('Fout bij het verwijderen van werknemer');
     } finally {
       setIsLoading(false);

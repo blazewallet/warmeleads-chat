@@ -61,6 +61,12 @@ export async function GET(request: NextRequest) {
       }
 
       const companyData = await response.json();
+      
+      console.log('📋 Company data loaded:', { 
+        ownerEmail, 
+        totalEmployees: companyData.employees?.length || 0,
+        employeeEmails: companyData.employees?.map((emp: any) => emp.email) || []
+      });
 
       return NextResponse.json({
         success: true,
@@ -237,11 +243,24 @@ export async function DELETE(request: NextRequest) {
       }
 
       const companyData = await response.json();
+      console.log('📊 Company data before deletion:', { 
+        totalEmployees: companyData.employees?.length || 0,
+        employeeEmails: companyData.employees?.map((emp: any) => emp.email) || []
+      });
 
       // Remove employee from company data
+      const initialLength = companyData.employees?.length || 0;
       companyData.employees = companyData.employees.filter(
         (emp: any) => emp.email !== employeeEmail
       );
+      const newLength = companyData.employees?.length || 0;
+      
+      console.log('🗑️ Employee removal:', { 
+        initialLength, 
+        newLength, 
+        removed: initialLength - newLength,
+        targetEmail: employeeEmail
+      });
 
       // Save updated company data
       await put(blobKey, JSON.stringify(companyData, null, 2), {
@@ -249,6 +268,8 @@ export async function DELETE(request: NextRequest) {
         token: process.env.BLOB_READ_WRITE_TOKEN,
         allowOverwrite: true,
       });
+      
+      console.log('💾 Company data saved to blob storage');
 
       // Also remove the employee account from auth-accounts
       const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
