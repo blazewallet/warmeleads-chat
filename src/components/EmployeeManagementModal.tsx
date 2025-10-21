@@ -111,7 +111,7 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
         
         // Check if the employee data has actually changed
         const hasChanged = newEmployeeCount !== currentEmployeeCount || 
-          !newEmployeeEmails.every((email, index) => email === currentEmployeeEmails[index]);
+          !newEmployeeEmails.every((email: string, index: number) => email === currentEmployeeEmails[index]);
         
         if (hasChanged || !company) {
           setCompany(data.company);
