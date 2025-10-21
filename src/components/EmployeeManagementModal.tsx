@@ -40,6 +40,7 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
   const [company, setCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteData, setInviteData] = useState({
     email: '',
@@ -62,6 +63,7 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
   const loadCompanyData = async () => {
     setIsLoading(true);
     setError(null);
+    setSuccess(null);
     
     try {
       const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
@@ -129,12 +131,17 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
   };
 
   const handleRemoveEmployee = async (employeeEmail: string) => {
-    if (!confirm(`Weet je zeker dat je ${employeeEmail} wilt verwijderen?`)) {
+    // Find employee name for better confirmation message
+    const employee = company?.employees.find(emp => emp.email === employeeEmail);
+    const employeeName = employee?.name || employeeEmail;
+    
+    if (!confirm(`Weet je zeker dat je ${employeeName} (${employeeEmail}) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
       return;
     }
 
     setIsLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const response = await fetch(
@@ -145,7 +152,16 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
       const result = await response.json();
 
       if (response.ok && result.success) {
+        // Show success message
+        setSuccess(`${employeeName} is succesvol verwijderd uit het team.`);
+        
+        // Reload company data to update the UI
         await loadCompanyData();
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setSuccess(null);
+        }, 3000);
       } else {
         setError(result.error || 'Fout bij het verwijderen van werknemer');
       }
@@ -207,6 +223,15 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
               {error && (
                 <div className="mb-6 p-4 bg-red-100 border-2 border-red-300 rounded-xl text-red-700">
                   {error}
+                </div>
+              )}
+              
+              {success && (
+                <div className="mb-6 p-4 bg-green-100 border-2 border-green-300 rounded-xl text-green-700">
+                  <div className="flex items-center gap-2">
+                    <CheckIcon className="w-5 h-5" />
+                    {success}
+                  </div>
                 </div>
               )}
 
