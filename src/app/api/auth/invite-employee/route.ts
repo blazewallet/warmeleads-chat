@@ -26,6 +26,8 @@ export async function POST(request: NextRequest) {
 
     // Check if employee account already exists
     const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
+    let employeeExists = false;
+    let existingEmployeeData = null;
     
     try {
       const { blobs } = await list({
@@ -34,16 +36,19 @@ export async function POST(request: NextRequest) {
       });
 
       if (blobs.length > 0) {
-        return NextResponse.json(
-          { error: 'Er bestaat al een account met dit emailadres' },
-          { status: 409 }
-        );
+        employeeExists = true;
+        // Get existing employee data to retrieve current info
+        const response = await fetch(blobs[0].url);
+        if (response.ok) {
+          existingEmployeeData = await response.json();
+        }
+        console.log('📋 Employee account already exists:', employeeEmail);
       }
     } catch (error) {
       console.log('Employee account check:', error);
     }
 
-    // Add employee to company
+    // Add employee to company (this will update or add to company list regardless)
     const companyResponse = await fetch(`${request.nextUrl.origin}/api/auth/company`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -68,39 +73,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create temporary password (employee will reset it on first login)
-    const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
-    const hashedPassword = await bcrypt.hash(tempPassword, 12);
+    let employeeAccountData;
+    
+    if (employeeExists && existingEmployeeData) {
+      // Update existing employee account
+      employeeAccountData = {
+        ...existingEmployeeData,
+        name: employeeName,
+        companyId: ownerEmail,
+        ownerEmail: ownerEmail,
+        permissions: permissions || existingEmployeeData.permissions || {
+          canViewLeads: true,
+          canViewOrders: true,
+          canManageEmployees: false,
+          canCheckout: false,
+        },
+        updatedAt: new Date().toISOString()
+      };
+      console.log('📝 Updating existing employee account:', employeeEmail);
+    } else {
+      // Create new employee account
+      const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
+      const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
-    // Create employee account data
-    const employeeAccountData = {
-      email: employeeEmail,
-      password: hashedPassword,
-      name: employeeName,
-      company: '', // Will be set from company data
-      phone: '',
-      createdAt: new Date().toISOString(),
-      isGuest: false,
-      role: 'employee',
-      companyId: ownerEmail,
-      ownerEmail: ownerEmail,
-      permissions: permissions || {
-        canViewLeads: true,
-        canViewOrders: true,
-        canManageEmployees: false,
-        canCheckout: false,
-      },
-      needsPasswordReset: true, // Employee must set password on first login
-      tempPassword: tempPassword // For email invitation
-    };
+      employeeAccountData = {
+        email: employeeEmail,
+        password: hashedPassword,
+        name: employeeName,
+        company: '', // Will be set from company data
+        phone: '',
+        createdAt: new Date().toISOString(),
+        isGuest: false,
+        role: 'employee',
+        companyId: ownerEmail,
+        ownerEmail: ownerEmail,
+        permissions: permissions || {
+          canViewLeads: true,
+          canViewOrders: true,
+          canManageEmployees: false,
+          canCheckout: false,
+        },
+        needsPasswordReset: true, // Employee must set password on first login
+        tempPassword: tempPassword // For email invitation
+      };
+      console.log('✅ Creating new employee account:', employeeEmail);
+    }
 
     // Save employee account
-    const employeeBlob = await put(employeeBlobKey, JSON.stringify(employeeAccountData, null, 2), {
+    await put(employeeBlobKey, JSON.stringify(employeeAccountData, null, 2), {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
+      allowOverwrite: true,
     });
-
-    console.log('✅ Employee account created:', employeeEmail);
 
     // Get owner info for email
     let ownerName = 'Eigenaar';
@@ -136,13 +160,16 @@ export async function POST(request: NextRequest) {
       console.warn('⚠️ Failed to send invitation email, but employee account was created');
     }
     
+    const actionMessage = employeeExists ? 'Werknemer is toegevoegd' : 'Werknemer is uitgenodigd';
+    
     return NextResponse.json({
       success: true,
-      message: `Werknemer is uitgenodigd${emailSent ? ' en email is verzonden' : ' (email kon niet worden verzonden)'}`,
+      message: `${actionMessage}${emailSent ? ' en email is verzonden' : ' (email kon niet worden verzonden)'}`,
       employee: {
         email: employeeEmail,
         name: employeeName,
-        needsPasswordReset: true
+        needsPasswordReset: !employeeExists, // Only new employees need password reset
+        existingAccount: employeeExists
       }
     });
 
