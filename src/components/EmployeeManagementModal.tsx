@@ -75,7 +75,7 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
   }, [isOpen, user?.email]);
 
   const loadCompanyData = async (clearMessages = true) => {
-    if (!isMountedRef.current) return; // Prevent state updates if component unmounted
+    if (!isMountedRef.current || !user?.email) return; // Prevent state updates if component unmounted or no user
     
     setIsLoading(true);
     setError(null);
@@ -108,6 +108,11 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
 
   const handleInviteEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!user?.email) {
+      setError('Gebruiker niet gevonden');
+      return;
+    }
     
     if (!inviteData.email || !inviteData.name) {
       setError('Email en naam zijn verplicht');
@@ -156,25 +161,24 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
   };
 
   const handleRemoveEmployee = async (employeeEmail: string) => {
+    if (!user?.email) {
+      setError('Gebruiker niet gevonden');
+      return;
+    }
+    
     // Find employee name for better confirmation message
     const employee = company?.employees.find(emp => emp.email === employeeEmail);
     const employeeName = employee?.name || employeeEmail;
     
-    console.log('🗑️ Delete button clicked for:', { employeeEmail, employeeName, ownerEmail: user.email });
-    
     if (!confirm(`Weet je zeker dat je ${employeeName} (${employeeEmail}) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
-      console.log('🗑️ Delete cancelled by user');
       return;
     }
 
-    console.log('🗑️ Delete confirmed by user, starting deletion...');
     setIsLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
-      console.log('🗑️ Attempting to delete employee:', { ownerEmail: user.email, employeeEmail });
-      
       const deleteUrl = `/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&employeeEmail=${encodeURIComponent(employeeEmail)}`;
       console.log('🗑️ Delete URL:', deleteUrl);
       
@@ -205,7 +209,7 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
         // Verify the deletion was successful by doing a background check
         // Only reload if we detect inconsistency
         setTimeout(async () => {
-          if (!isMountedRef.current) return;
+          if (!isMountedRef.current || !user?.email) return;
           
           try {
             const verifyResponse = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
