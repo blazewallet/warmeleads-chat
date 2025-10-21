@@ -1,36 +1,31 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CustomerPortal } from '@/components/CustomerPortal';
-import { LoginForm } from '@/components/LoginForm';
+import { EmployeeSetupModal } from '@/components/EmployeeSetupModal';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth';
 
 export default function PortalPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, init, initiatePasswordSetup, user, isAuthenticated, needsPasswordSetup } = useAuthStore();
+  const { logout, init, isAuthenticated } = useAuthStore();
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [setupEmail, setSetupEmail] = useState<string>('');
 
   // Initialize auth state on portal load
   React.useEffect(() => {
     init();
   }, [init]);
 
-  // Check for URL parameters to initiate password setup
+  // Check for setup parameter
   React.useEffect(() => {
-    const emailParam = searchParams.get('email');
     const setupParam = searchParams.get('setup');
-
-    if (emailParam && setupParam === 'true') {
-      console.log('🔑 URL parameters detected for password setup:', { emailParam, setupParam });
-      initiatePasswordSetup(decodeURIComponent(emailParam));
+    if (setupParam && !isAuthenticated) {
+      setSetupEmail(decodeURIComponent(setupParam));
+      setShowSetupModal(true);
     }
-  }, [searchParams, initiatePasswordSetup]);
-
-  // Check if we should show login form for password setup
-  const emailParam = searchParams.get('email');
-  const setupParam = searchParams.get('setup');
-  const shouldShowLoginForm = !isAuthenticated && emailParam && setupParam === 'true';
+  }, [searchParams, isAuthenticated]);
 
   const handleBackToHome = () => {
     // Navigate to homepage WITHOUT logging out - user stays logged in
@@ -42,38 +37,30 @@ export default function PortalPage() {
     router.push('/?chat=direct');
   };
 
-  const handleLoginSuccess = () => {
-    // Password setup completed, user should now be logged in
-    // No need to do anything special, the CustomerPortal will render automatically
+  const handleSetupSuccess = () => {
+    setShowSetupModal(false);
+    // Redirect to clean URL without setup parameter
+    router.push('/portal');
   };
 
-  const handleBackToAuth = () => {
-    router.push('/');
+  const handleSetupClose = () => {
+    setShowSetupModal(false);
+    // Redirect to clean URL without setup parameter
+    router.push('/portal');
   };
-
-  const handleSwitchToRegister = () => {
-    // Not needed for password setup flow
-  };
-
-  const handleSwitchToGuest = () => {
-    // Not needed for password setup flow
-  };
-
-  // Show login form for password setup when user is not authenticated but has setup parameters
-  if (shouldShowLoginForm) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-600 to-orange-600 flex items-center justify-center p-4">
-        <LoginForm
-          onBack={handleBackToAuth}
-          onSwitchToRegister={handleSwitchToRegister}
-          onSwitchToGuest={handleSwitchToGuest}
-          onSuccess={handleLoginSuccess}
-        />
-      </div>
-    );
-  }
 
   return (
-    <CustomerPortal onBackToHome={handleBackToHome} onStartChat={handleStartChat} />
+    <>
+      <CustomerPortal onBackToHome={handleBackToHome} onStartChat={handleStartChat} />
+      
+      {showSetupModal && setupEmail && (
+        <EmployeeSetupModal
+          isOpen={showSetupModal}
+          onClose={handleSetupClose}
+          employeeEmail={setupEmail}
+          onSuccess={handleSetupSuccess}
+        />
+      )}
+    </>
   );
 }

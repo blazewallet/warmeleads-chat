@@ -37,19 +37,6 @@ export async function POST(request: NextRequest) {
       const response = await fetch(accountBlob.url);
       const accountData = await response.json();
       
-      // Check if employee needs password reset first
-      if (accountData.needsPasswordReset) {
-        return NextResponse.json(
-          { 
-            error: 'Password reset required',
-            needsPasswordReset: true,
-            email: accountData.email,
-            name: accountData.name
-          },
-          { status: 200 }
-        );
-      }
-
       // Verify password
       const isValidPassword = await bcrypt.compare(password, accountData.password);
       

@@ -43,8 +43,6 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  needsPasswordSetup: boolean;
-  passwordSetupEmail: string | null;
   
   // Actions
   login: (email: string, password: string) => Promise<void>;
@@ -53,10 +51,7 @@ export interface AuthState {
   logout: () => void;
   updateProfile: (updates: Partial<User>) => void;
   createAccountFromGuest: (userData: RegisterData) => Promise<void>;
-  setupPassword: (email: string, password: string) => Promise<void>;
-  initiatePasswordSetup: (email: string) => void;
   clearError: () => void;
-  clearPasswordSetup: () => void;
   init: () => void;
 }
 
@@ -225,8 +220,6 @@ let authState = {
   isAuthenticated: false,
   isLoading: false,
   error: null as string | null,
-  needsPasswordSetup: false,
-  passwordSetupEmail: null as string | null,
 };
 
 // Listeners for state changes
@@ -242,8 +235,6 @@ export const useAuthStore = create<AuthState>()(
     isAuthenticated: authState.isAuthenticated,
     isLoading: authState.isLoading,
     error: authState.error,
-    needsPasswordSetup: authState.needsPasswordSetup,
-    passwordSetupEmail: authState.passwordSetupEmail,
 
     login: async (email: string, password: string) => {
       console.log('🔐 LOGIN ATTEMPT:', { email });
@@ -312,20 +303,6 @@ export const useAuthStore = create<AuthState>()(
           });
           
           const data = await response.json();
-          
-          // Handle password reset requirement for employees
-          if (data.needsPasswordReset) {
-            authState.needsPasswordSetup = true;
-            authState.passwordSetupEmail = email;
-            authState.isLoading = false;
-            set({ 
-              needsPasswordSetup: true, 
-              passwordSetupEmail: email,
-              isLoading: false,
-              error: null 
-            });
-            throw new Error('PASSWORD_RESET_REQUIRED');
-          }
           
           if (!response.ok) {
             throw new Error(data.error || 'Ongeldig emailadres of wachtwoord');
@@ -615,63 +592,6 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false 
           });
         }
-      },
-
-      setupPassword: async (email: string, password: string) => {
-        set({ isLoading: true, error: null });
-        
-        try {
-          const response = await fetch('/api/auth/setup-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, newPassword: password })
-          });
-          
-          const data = await response.json();
-          
-          if (!response.ok) {
-            throw new Error(data.error || 'Wachtwoord instellen mislukt');
-          }
-          
-          // Clear password setup state
-          authState.needsPasswordSetup = false;
-          authState.passwordSetupEmail = null;
-          
-          set({ 
-            needsPasswordSetup: false, 
-            passwordSetupEmail: null,
-            isLoading: false,
-            error: null 
-          });
-          
-          // Now login automatically with the new password
-          await get().login(email, password);
-          
-        } catch (error) {
-          set({ 
-            error: error instanceof Error ? error.message : 'Wachtwoord instellen mislukt', 
-            isLoading: false 
-          });
-          throw error;
-        }
-      },
-
-      initiatePasswordSetup: (email: string) => {
-        authState.needsPasswordSetup = true;
-        authState.passwordSetupEmail = email;
-        set({ 
-          needsPasswordSetup: true, 
-          passwordSetupEmail: email,
-          error: null,
-          isLoading: false,
-        });
-        console.log('🔑 Initiating password setup directly for:', email);
-      },
-
-      clearPasswordSetup: () => {
-        authState.needsPasswordSetup = false;
-        authState.passwordSetupEmail = null;
-        set({ needsPasswordSetup: false, passwordSetupEmail: null });
       },
 
       clearError: () => {

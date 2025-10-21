@@ -41,7 +41,6 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showInviteForm, setShowInviteForm] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ show: boolean; employeeEmail: string; employeeName: string } | null>(null);
   const [inviteData, setInviteData] = useState({
     email: '',
     name: '',
@@ -65,32 +64,15 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     setError(null);
     
     try {
-      // Add cache busting parameter to ensure fresh data
-      const timestamp = Date.now();
-      const url = `/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&_t=${timestamp}`;
-      console.log('🔄 Loading company data:', url);
-      
-      const response = await fetch(url, {
-        // Add headers to prevent caching
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      console.log('📡 Load response status:', response.status);
+      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
       const data = await response.json();
-      console.log('📡 Load response data:', data);
       
       if (response.ok && data.success) {
-        console.log('✅ Company data loaded successfully:', data.company);
         setCompany(data.company);
       } else {
-        console.error('❌ Failed to load company data:', data);
         setError(data.error || 'Fout bij het laden van bedrijfsgegevens');
       }
     } catch (err) {
-      console.error('❌ Error loading company data:', err);
       setError('Fout bij het laden van bedrijfsgegevens');
     } finally {
       setIsLoading(false);
@@ -146,26 +128,13 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     }
   };
 
-  const handleRemoveEmployee = (employeeEmail: string) => {
-    const employee = company?.employees.find(emp => emp.email === employeeEmail);
-    if (employee) {
-      setDeleteConfirmation({
-        show: true,
-        employeeEmail: employeeEmail,
-        employeeName: employee.name
-      });
+  const handleRemoveEmployee = async (employeeEmail: string) => {
+    if (!confirm(`Weet je zeker dat je ${employeeEmail} wilt verwijderen?`)) {
+      return;
     }
-  };
 
-  const confirmDeleteEmployee = async () => {
-    if (!deleteConfirmation) return;
-
-    const employeeEmail = deleteConfirmation.employeeEmail;
-    console.log('🗑️ Removing employee:', { employeeEmail, ownerEmail: user?.email });
-    
     setIsLoading(true);
     setError(null);
-    setDeleteConfirmation(null);
 
     try {
       const response = await fetch(
@@ -173,34 +142,18 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
         { method: 'DELETE' }
       );
 
-      console.log('📡 Delete response status:', response.status);
       const result = await response.json();
-      console.log('📡 Delete response data:', result);
 
       if (response.ok && result.success) {
-        console.log('✅ Delete successful, reloading company data...');
-        
-        // Force a more aggressive reload by clearing the company state first
-        setCompany(null);
-        
-        // Then reload with a different cache buster
         await loadCompanyData();
-        
-        console.log('✅ Company data reloaded after delete');
       } else {
-        console.error('❌ Delete failed:', result);
         setError(result.error || 'Fout bij het verwijderen van werknemer');
       }
     } catch (err) {
-      console.error('❌ Delete error:', err);
       setError('Fout bij het verwijderen van werknemer');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const cancelDelete = () => {
-    setDeleteConfirmation(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -404,9 +357,11 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                 employee.isActive 
                                   ? 'bg-green-100 text-green-700 border border-green-300'
-                                  : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                                  : employee.acceptedAt
+                                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                    : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
                               }`}>
-                                {employee.isActive ? 'Actief' : 'Uitgenodigd'}
+                                {employee.isActive ? 'Actief' : employee.acceptedAt ? 'Account Aangemaakt' : 'Uitgenodigd'}
                               </span>
                             </div>
                             <p className="text-gray-600 mb-2">{employee.email}</p>
@@ -454,65 +409,6 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
           </div>
         </div>
       </motion.div>
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmation && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-60"
-          onClick={cancelDelete}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed inset-0 z-60 overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex min-h-full items-center justify-center p-4">
-              <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border-2 border-red-200">
-                <div className="p-6">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="p-3 bg-red-100 rounded-full">
-                      <TrashIcon className="w-6 h-6 text-red-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">Werknemer verwijderen</h3>
-                      <p className="text-gray-600 text-sm">Deze actie kan niet ongedaan worden gemaakt.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mb-6">
-                    <p className="text-gray-700">
-                      Weet je zeker dat je <strong>{deleteConfirmation.employeeName}</strong> 
-                      <br />({deleteConfirmation.employeeEmail}) wilt verwijderen?
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      onClick={cancelDelete}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-xl hover:bg-gray-400 transition-all font-medium"
-                      disabled={isLoading}
-                    >
-                      Annuleren
-                    </button>
-                    <button
-                      onClick={confirmDeleteEmployee}
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isLoading ? 'Verwijderen...' : 'Verwijderen'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
     </AnimatePresence>
   );
 }

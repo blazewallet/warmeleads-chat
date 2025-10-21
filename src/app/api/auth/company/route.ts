@@ -58,7 +58,6 @@ export async function GET(request: NextRequest) {
       }
 
       const companyData = await response.json();
-      console.log('📋 Retrieved company data for:', ownerEmail, 'employees:', companyData.employees?.length || 0);
 
       return NextResponse.json({
         success: true,
@@ -147,7 +146,8 @@ export async function POST(request: NextRequest) {
           canCheckout: false,
         },
         invitedAt: new Date().toISOString(),
-        isActive: false // Will be activated when they accept
+        isActive: false, // Will be activated when they set password
+        acceptedAt: undefined
       };
 
       // Check if employee already exists
@@ -235,49 +235,19 @@ export async function DELETE(request: NextRequest) {
 
       const companyData = await response.json();
 
-      // Remove employee from company data
+      // Remove employee
       companyData.employees = companyData.employees.filter(
         (emp: any) => emp.email !== employeeEmail
       );
 
-      console.log('📝 Updated company data (before save):', JSON.stringify(companyData, null, 2));
-
       // Save updated company data
-      const saveResult = await put(blobKey, JSON.stringify(companyData, null, 2), {
+      await put(blobKey, JSON.stringify(companyData, null, 2), {
         access: 'public',
         token: process.env.BLOB_READ_WRITE_TOKEN,
         allowOverwrite: true,
       });
-      console.log('💾 Company data saved:', saveResult.url);
 
-      // Also delete the employee account from Blob Storage
-      const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
-      console.log('🔍 Looking for employee blob:', employeeBlobKey);
-      
-      try {
-        // Check if employee account exists
-        const { blobs: employeeBlobs } = await list({
-          prefix: employeeBlobKey,
-          token: process.env.BLOB_READ_WRITE_TOKEN
-        });
-
-        console.log('🔍 Found employee blobs:', employeeBlobs.length, employeeBlobs.map(b => b.pathname));
-
-        if (employeeBlobs.length > 0) {
-          // Delete the employee account blob using the blob name/key
-          await del(employeeBlobKey, {
-            token: process.env.BLOB_READ_WRITE_TOKEN
-          });
-          console.log('✅ Employee account deleted from Blob Storage:', employeeEmail);
-        } else {
-          console.log('ℹ️ Employee account not found in Blob Storage:', employeeEmail);
-        }
-      } catch (deleteError) {
-        console.error('⚠️ Warning: Could not delete employee account from Blob Storage:', deleteError);
-        // Don't fail the whole operation if account deletion fails
-      }
-
-      console.log('✅ Employee removed from company and account deleted:', employeeEmail);
+      console.log('✅ Employee removed:', employeeEmail);
 
       return NextResponse.json({
         success: true,
