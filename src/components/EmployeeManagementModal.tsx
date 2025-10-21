@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   XMarkIcon, 
@@ -10,7 +10,7 @@ import {
   PencilIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
-import { useAuthStore, type UserPermissions } from '@/lib/auth';
+import { useAuthStore, type UserPermissions, type User } from '@/lib/auth';
 
 interface EmployeeAccount {
   email: string;
@@ -33,7 +33,7 @@ interface Company {
 interface EmployeeManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user: any;
+  user: User | null;
 }
 
 export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManagementModalProps) {
@@ -53,20 +53,30 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     }
   });
 
-  // Load company data when modal opens - always fetch fresh data
+  // Use refs to track cleanup and prevent race conditions
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Load company data when modal opens
   useEffect(() => {
     if (isOpen && user?.email) {
-      // Use the same logic as login: companyId || ownerEmail || user.email
-      const ownerEmail = user.companyId || user.ownerEmail || user.email;
-      console.log('🔄 Modal opened, loading fresh company data for:', { 
-        userEmail: user.email, 
-        ownerEmail: ownerEmail 
-      });
+      isMountedRef.current = true;
       loadCompanyData();
     }
+    
+    // Cleanup function
+    return () => {
+      isMountedRef.current = false;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
   }, [isOpen, user?.email]);
 
   const loadCompanyData = async (clearMessages = true) => {
+    if (!isMountedRef.current) return; // Prevent state updates if component unmounted
+    
     setIsLoading(true);
     setError(null);
     if (clearMessages) {
@@ -74,67 +84,25 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     }
     
     try {
-      // Use the same logic as login: companyId || ownerEmail || user.email
-      const ownerEmail = user.companyId || user.ownerEmail || user.email;
-      console.log('🔄 Loading company data for:', { 
-        userEmail: user.email,
-        companyId: user.companyId,
-        ownerEmail: user.ownerEmail,
-        finalOwnerEmail: ownerEmail,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Add cache-busting parameter to force fresh data
-      const cacheBuster = `t=${Date.now()}`;
-      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(ownerEmail)}&${cacheBuster}`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
+      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
       const data = await response.json();
       
-      console.log('🔄 Company data response:', { 
-        ok: response.ok, 
-        success: data.success, 
-        employees: data.company?.employees?.length,
-        timestamp: new Date().toISOString()
-      });
+      // Double-check component is still mounted before updating state
+      if (!isMountedRef.current) return;
       
       if (response.ok && data.success) {
-        // Only update state if we have fresh data that's different from current state
-        const newEmployeeCount = data.company?.employees?.length || 0;
-        const currentEmployeeCount = company?.employees?.length || 0;
-        const newEmployeeEmails = data.company?.employees?.map((emp: any) => emp.email) || [];
-        const currentEmployeeEmails = company?.employees?.map((emp: any) => emp.email) || [];
-        
-        // Check if the employee data has actually changed
-        const hasChanged = newEmployeeCount !== currentEmployeeCount || 
-          !newEmployeeEmails.every((email: string, index: number) => email === currentEmployeeEmails[index]);
-        
-        if (hasChanged || !company) {
-          setCompany(data.company);
-          console.log('✅ Company data updated:', { 
-            oldCount: currentEmployeeCount,
-            newCount: newEmployeeCount,
-            oldEmails: currentEmployeeEmails,
-            newEmails: newEmployeeEmails
-          });
-        } else {
-          console.log('✅ Company data unchanged, no state update needed:', { 
-            employeeCount: newEmployeeCount,
-            employeeEmails: newEmployeeEmails
-          });
-        }
+        setCompany(data.company);
       } else {
         setError(data.error || 'Fout bij het laden van bedrijfsgegevens');
       }
     } catch (err) {
-      console.error('❌ Error loading company data:', err);
-      setError('Fout bij het laden van bedrijfsgegevens');
+      if (isMountedRef.current) {
+        setError('Fout bij het laden van bedrijfsgegevens');
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -149,15 +117,12 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     setIsLoading(true);
     setError(null);
 
-    // Use the same logic as login: companyId || ownerEmail || user.email
-    const ownerEmail = user.companyId || user.ownerEmail || user.email;
-
     try {
       const response = await fetch('/api/auth/invite-employee', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ownerEmail: ownerEmail,
+          ownerEmail: user.email,
           employeeEmail: inviteData.email,
           employeeName: inviteData.name,
           permissions: inviteData.permissions
@@ -167,17 +132,8 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
       const result = await response.json();
 
       if (response.ok && result.success) {
-        console.log('✅ Employee invitation successful, reloading data...');
-        
-        // Show immediate feedback and reload company data to show new employee
-        setSuccess(`${inviteData.name} is succesvol uitgenodigd!`);
-        
-        // Wait a moment for Blob Storage to sync, then reload data
-        setTimeout(async () => {
-          console.log('🔄 Re-loading company data after invitation...');
-          await loadCompanyData(false); // Don't clear the success message
-        }, 1000);
-        
+        // Reload company data to show new employee
+        await loadCompanyData();
         setShowInviteForm(false);
         setInviteData({
           email: '',
@@ -189,11 +145,6 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
             canCheckout: false,
           }
         });
-        
-        // Clear success message after 5 seconds
-        setTimeout(() => {
-          setSuccess(null);
-        }, 5000);
       } else {
         setError(result.error || 'Fout bij het uitnodigen van werknemer');
       }
@@ -209,10 +160,7 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     const employee = company?.employees.find(emp => emp.email === employeeEmail);
     const employeeName = employee?.name || employeeEmail;
     
-    // Use the same logic as login: companyId || ownerEmail || user.email
-    const ownerEmail = user.companyId || user.ownerEmail || user.email;
-    
-    console.log('🗑️ Delete button clicked for:', { employeeEmail, employeeName, ownerEmail });
+    console.log('🗑️ Delete button clicked for:', { employeeEmail, employeeName, ownerEmail: user.email });
     
     if (!confirm(`Weet je zeker dat je ${employeeName} (${employeeEmail}) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
       console.log('🗑️ Delete cancelled by user');
@@ -225,9 +173,9 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     setSuccess(null);
 
     try {
-      console.log('🗑️ Attempting to delete employee:', { ownerEmail, employeeEmail });
+      console.log('🗑️ Attempting to delete employee:', { ownerEmail: user.email, employeeEmail });
       
-      const deleteUrl = `/api/auth/company?ownerEmail=${encodeURIComponent(ownerEmail)}&employeeEmail=${encodeURIComponent(employeeEmail)}`;
+      const deleteUrl = `/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&employeeEmail=${encodeURIComponent(employeeEmail)}`;
       console.log('🗑️ Delete URL:', deleteUrl);
       
       const response = await fetch(deleteUrl, { method: 'DELETE' });
@@ -239,46 +187,57 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
       console.log('🗑️ Delete response result:', result);
 
       if (response.ok && result.success) {
-        console.log('✅ Employee deletion successful, updating UI...');
-        
         // Immediately update the local state to remove the employee from UI
-        if (company) {
+        if (company && isMountedRef.current) {
           const updatedCompany = {
             ...company,
             employees: company.employees.filter(emp => emp.email !== employeeEmail)
           };
           setCompany(updatedCompany);
-          console.log('✅ Local UI updated immediately:', { 
-            beforeCount: company.employees.length, 
-            afterCount: updatedCompany.employees.length 
-          });
         }
         
         // Show success message
         const successMessage = `${employeeName} is succesvol verwijderd uit het team.`;
-        setSuccess(successMessage);
-        console.log('✅ Success message set:', successMessage);
+        if (isMountedRef.current) {
+          setSuccess(successMessage);
+        }
         
-        // Reload company data in background to ensure sync (without clearing success message)
-        // Wait a moment for Blob Storage to sync, then reload data
+        // Verify the deletion was successful by doing a background check
+        // Only reload if we detect inconsistency
         setTimeout(async () => {
-          console.log('🔄 Reloading company data in background...');
+          if (!isMountedRef.current) return;
+          
           try {
-            setIsLoading(true); // Show loading while refreshing
-            await loadCompanyData(false);
-            console.log('✅ Background company data reload completed');
-          } catch (reloadError) {
-            console.warn('⚠️ Background reload failed, but UI was already updated:', reloadError);
-            // UI is already updated, so don't show error to user
-          } finally {
-            setIsLoading(false);
+            const verifyResponse = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
+            const verifyData = await verifyResponse.json();
+            
+            // Only update if there's a discrepancy (employee still exists in backend but not in UI)
+            if (verifyResponse.ok && verifyData.success && verifyData.company) {
+              const stillExists = verifyData.company.employees.some((emp: EmployeeAccount) => emp.email === employeeEmail);
+              const uiShowsDeleted = !company?.employees.some(emp => emp.email === employeeEmail);
+              
+              // If backend still has employee but UI doesn't, update UI to match backend
+              // This handles the race condition where deletion might have failed
+              if (stillExists && uiShowsDeleted && isMountedRef.current) {
+                setCompany(verifyData.company);
+                setSuccess(null);
+                setError(`${employeeName} kon niet worden verwijderd. Probeer het opnieuw.`);
+              }
+            }
+          } catch (verifyError) {
+            // Verification failed, but don't change UI since local update was successful
           }
-        }, 1000);
+        }, 1000); // Check after 1 second
         
-        // Clear success message after 5 seconds
-        setTimeout(() => {
-          console.log('⏰ Clearing success message');
-          setSuccess(null);
+        // Clear success message after 5 seconds with proper cleanup
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setSuccess(null);
+          }
+          timeoutRef.current = null;
         }, 5000);
       } else {
         console.error('❌ Delete failed:', { status: response.status, result });

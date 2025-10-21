@@ -1,8 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put, list, del } from '@vercel/blob';
+import { safeLog } from '@/lib/logger';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
+
+interface EmployeeAccount {
+  email: string;
+  name: string;
+  role: 'employee';
+  permissions: {
+    canViewLeads: boolean;
+    canViewOrders: boolean;
+    canManageEmployees: boolean;
+    canCheckout: boolean;
+  };
+  invitedAt: string;
+  acceptedAt?: string;
+  isActive: boolean;
+}
+
+interface CompanyData {
+  id: string;
+  ownerEmail: string;
+  companyName: string;
+  employees: EmployeeAccount[];
+  createdAt: string;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,25 +79,23 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      // Fetch with cache-busting to ensure fresh data
+      // Use cache-busting headers to ensure fresh data
       const response = await fetch(blobs[0].url, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
       });
-      
       if (!response.ok) {
         throw new Error('Failed to fetch company data');
       }
 
       const companyData = await response.json();
       
-      console.log('📋 Fresh company data fetched:', { 
+      console.log('📋 Company data loaded:', { 
         ownerEmail, 
         totalEmployees: companyData.employees?.length || 0,
-        employeeEmails: companyData.employees?.map((emp: any) => emp.email) || [],
-        timestamp: new Date().toISOString()
+        employeeEmails: companyData.employees?.map((emp: any) => emp.email) || []
       });
 
       return NextResponse.json({
@@ -245,21 +267,23 @@ export async function DELETE(request: NextRequest) {
         );
       }
 
-      const response = await fetch(blobs[0].url);
+      // Use cache-busting headers to ensure we get fresh data
+      const response = await fetch(blobs[0].url, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch company data');
       }
 
       const companyData = await response.json();
-      console.log('📊 Company data before deletion:', { 
-        totalEmployees: companyData.employees?.length || 0,
-        employeeEmails: companyData.employees?.map((emp: any) => emp.email) || []
-      });
 
       // Remove employee from company data
       const initialLength = companyData.employees?.length || 0;
       const filteredEmployees = companyData.employees.filter(
-        (emp: any) => emp.email !== employeeEmail
+        (emp: EmployeeAccount) => emp.email !== employeeEmail
       );
       
       console.log('🗑️ Employee removal:', { 
@@ -288,11 +312,32 @@ export async function DELETE(request: NextRequest) {
         allowOverwrite: true,
       });
       
-      console.log('💾 Company data saved to blob storage successfully');
-      console.log('🔍 Final company data:', {
-        employeesCount: companyData.employees?.length || 0,
-        employees: companyData.employees?.map((emp: any) => ({ name: emp.name, email: emp.email })) || []
-      });
+      // Verify the save operation was successful by reading it back
+      try {
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure write is complete
+        
+        const verifyResponse = await fetch(blobs[0].url, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        if (verifyResponse.ok) {
+          const verifyData = await verifyResponse.json();
+          const verifyCount = verifyData.employees?.length || 0;
+          const expectedCount = companyData.employees?.length || 0;
+          
+          if (verifyCount !== expectedCount) {
+            console.warn('⚠️ Verification failed: employee count mismatch', {
+              expected: expectedCount,
+              actual: verifyCount
+            });
+          }
+        }
+      } catch (verifyError) {
+        console.warn('⚠️ Could not verify save operation:', verifyError);
+      }
 
       // Also remove the employee account from auth-accounts
       const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;

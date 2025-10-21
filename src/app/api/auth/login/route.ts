@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { list } from '@vercel/blob';
 import bcrypt from 'bcryptjs';
+import { ApiResponseHandler } from '@/lib/apiResponses';
+import { safeLog } from '@/lib/logger';
 
 const BLOB_STORE_PREFIX = 'auth-accounts';
 
@@ -8,13 +10,10 @@ export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
     
-    console.log('🔐 POST /api/auth/login - Login attempt:', email);
+    safeLog.log('🔐 POST /api/auth/login - Login attempt:', email);
     
     if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email en wachtwoord zijn verplicht' },
-        { status: 400 }
-      );
+      return ApiResponseHandler.validationError('Email en wachtwoord zijn verplicht');
     }
     
     // Find account in Blob Storage

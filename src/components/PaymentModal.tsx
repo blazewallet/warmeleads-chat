@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { XMarkIcon, CheckIcon, CreditCardIcon } from '@heroicons/react/24/outline';
 import { leadPackages, formatPrice } from '@/lib/stripe';
@@ -27,6 +27,16 @@ export function PaymentModal({
 }: PaymentModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const packages = leadPackages[industry]?.filter(pkg => pkg.type === leadType) || [];
 
@@ -57,11 +67,15 @@ export function PaymentModal({
       console.log('Payment intent created:', clientSecret);
       
       // For now, we'll simulate a successful payment
-      setTimeout(() => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
         setIsProcessing(false);
         onClose();
         // Show success message
         alert('Betaling succesvol! Uw leads worden binnen 15 minuten geleverd.');
+        timeoutRef.current = null;
       }, 2000);
 
     } catch (error) {

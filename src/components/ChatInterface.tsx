@@ -42,6 +42,7 @@ export function ChatInterface({ entryPoint = 'direct', onBackToHome, onShowAccou
   const [paymentMethod, setPaymentMethod] = useState<'ideal' | 'card'>('ideal');
   const [lastSelectedQuantity, setLastSelectedQuantity] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const timersRef = useRef<Set<NodeJS.Timeout>>(new Set());
   const { userProfile, updateProfile } = useChatStore();
   const { user, isAuthenticated } = useAuthStore();
 
@@ -50,10 +51,20 @@ export function ChatInterface({ entryPoint = 'direct', onBackToHome, onShowAccou
     return lastSelectedQuantity;
   };
 
+  // Helper function to manage timers with automatic cleanup
+  const setTimerWithCleanup = (callback: () => void, delay: number): NodeJS.Timeout => {
+    const timer = setTimeout(() => {
+      timersRef.current.delete(timer);
+      callback();
+    }, delay);
+    timersRef.current.add(timer);
+    return timer;
+  };
+
   // Use the centralized pricing calculator
 
   const scrollToBottom = () => {
-    setTimeout(() => {
+    setTimerWithCleanup(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, 100);
   };
@@ -113,11 +124,11 @@ export function ChatInterface({ entryPoint = 'direct', onBackToHome, onShowAccou
     }
 
     // Tweede bericht na korte delay
-    const timer1 = setTimeout(() => {
+    const timer1 = setTimerWithCleanup(() => {
       if (!isMounted) return;
       setIsTyping(true);
       
-      const timer2 = setTimeout(() => {
+      setTimerWithCleanup(() => {
         if (!isMounted) return;
         setIsTyping(false);
         const secondMessage: Message = {
@@ -129,11 +140,11 @@ export function ChatInterface({ entryPoint = 'direct', onBackToHome, onShowAccou
         setMessages(prev => [...prev, secondMessage]);
 
         // Vraag na nog een delay
-        const timer3 = setTimeout(() => {
+        setTimerWithCleanup(() => {
           if (!isMounted) return;
           setIsTyping(true);
           
-          const timer4 = setTimeout(() => {
+          setTimerWithCleanup(() => {
             if (!isMounted) return;
             setIsTyping(false);
             const questionMessage: Message = {
@@ -153,6 +164,9 @@ export function ChatInterface({ entryPoint = 'direct', onBackToHome, onShowAccou
     // Cleanup function
     return () => {
       isMounted = false;
+      // Clear all pending timers
+      timersRef.current.forEach(timer => clearTimeout(timer));
+      timersRef.current.clear();
     };
   }, [entryPoint]); // Run when entryPoint changes
 
