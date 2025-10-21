@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
       }
 
       const companyData = await response.json();
+      console.log('📋 Retrieved company data for:', ownerEmail, 'employees:', companyData.employees?.length || 0);
 
       return NextResponse.json({
         success: true,
@@ -239,15 +240,19 @@ export async function DELETE(request: NextRequest) {
         (emp: any) => emp.email !== employeeEmail
       );
 
+      console.log('📝 Updated company data (before save):', JSON.stringify(companyData, null, 2));
+
       // Save updated company data
-      await put(blobKey, JSON.stringify(companyData, null, 2), {
+      const saveResult = await put(blobKey, JSON.stringify(companyData, null, 2), {
         access: 'public',
         token: process.env.BLOB_READ_WRITE_TOKEN,
         allowOverwrite: true,
       });
+      console.log('💾 Company data saved:', saveResult.url);
 
       // Also delete the employee account from Blob Storage
       const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
+      console.log('🔍 Looking for employee blob:', employeeBlobKey);
       
       try {
         // Check if employee account exists
@@ -255,6 +260,8 @@ export async function DELETE(request: NextRequest) {
           prefix: employeeBlobKey,
           token: process.env.BLOB_READ_WRITE_TOKEN
         });
+
+        console.log('🔍 Found employee blobs:', employeeBlobs.length, employeeBlobs.map(b => b.pathname));
 
         if (employeeBlobs.length > 0) {
           // Delete the employee account blob using the blob name/key
