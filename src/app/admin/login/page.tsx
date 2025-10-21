@@ -24,12 +24,15 @@ export default function AdminLoginPage() {
     setIsLoading(true);
     setError('');
 
-    // Check credentials
-    if (username === 'admin' && password === 'Ab49n805!') {
+    // Check credentials - allow both admin username and email
+    const isValidUser = (username === 'admin' || username === 'h.schlimback@gmail.com');
+    const isValidPassword = password === 'Ab49n805!';
+    
+    if (isValidUser && isValidPassword) {
       // Set admin session
       localStorage.setItem('warmeleads_admin_token', 'admin_authenticated');
       localStorage.setItem('warmeleads_admin_user', JSON.stringify({
-        username: 'admin',
+        username: username,
         role: 'administrator',
         loginTime: new Date().toISOString()
       }));
@@ -80,7 +83,7 @@ export default function AdminLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:ring-2 focus:ring-white/50 focus:border-white/50 focus:outline-none"
-                placeholder="admin"
+                placeholder="admin of email"
                 required
               />
             </div>
