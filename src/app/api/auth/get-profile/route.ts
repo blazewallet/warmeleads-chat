@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get profile data from Blob Storage
-    const blobKey = `auth-accounts/${email.replace('@', '_at_').replace('.', '_dot_')}.json`;
+    const blobKey = `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
     
     try {
       // Check if blob exists

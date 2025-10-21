@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     console.log('🔐 Changing password for:', email);
 
     // Get current account data from Blob Storage
-    const blobKey = `auth-accounts/${email.replace('@', '_at_').replace('.', '_dot_')}.json`;
+    const blobKey = `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
     
     try {
       // Get existing account data

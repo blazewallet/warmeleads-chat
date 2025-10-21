@@ -64,7 +64,9 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     setError(null);
     
     try {
-      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
+      // Add cache busting parameter to ensure fresh data
+      const timestamp = Date.now();
+      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&_t=${timestamp}`);
       const data = await response.json();
       
       if (response.ok && data.success) {

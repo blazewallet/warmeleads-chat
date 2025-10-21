@@ -234,7 +234,7 @@ export async function DELETE(request: NextRequest) {
 
       const companyData = await response.json();
 
-      // Remove employee
+      // Remove employee from company data
       companyData.employees = companyData.employees.filter(
         (emp: any) => emp.email !== employeeEmail
       );
@@ -246,7 +246,31 @@ export async function DELETE(request: NextRequest) {
         allowOverwrite: true,
       });
 
-      console.log('✅ Employee removed:', employeeEmail);
+      // Also delete the employee account from Blob Storage
+      const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
+      
+      try {
+        // Check if employee account exists
+        const { blobs: employeeBlobs } = await list({
+          prefix: employeeBlobKey,
+          token: process.env.BLOB_READ_WRITE_TOKEN
+        });
+
+        if (employeeBlobs.length > 0) {
+          // Delete the employee account blob using the blob name/key
+          await del(employeeBlobKey, {
+            token: process.env.BLOB_READ_WRITE_TOKEN
+          });
+          console.log('✅ Employee account deleted from Blob Storage:', employeeEmail);
+        } else {
+          console.log('ℹ️ Employee account not found in Blob Storage:', employeeEmail);
+        }
+      } catch (deleteError) {
+        console.error('⚠️ Warning: Could not delete employee account from Blob Storage:', deleteError);
+        // Don't fail the whole operation if account deletion fails
+      }
+
+      console.log('✅ Employee removed from company and account deleted:', employeeEmail);
 
       return NextResponse.json({
         success: true,
