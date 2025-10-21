@@ -56,7 +56,12 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
   // Load company data when modal opens - always fetch fresh data
   useEffect(() => {
     if (isOpen && user?.email) {
-      console.log('🔄 Modal opened, loading fresh company data for:', user.email);
+      // Use the same logic as login: companyId || ownerEmail || user.email
+      const ownerEmail = user.companyId || user.ownerEmail || user.email;
+      console.log('🔄 Modal opened, loading fresh company data for:', { 
+        userEmail: user.email, 
+        ownerEmail: ownerEmail 
+      });
       loadCompanyData();
     }
   }, [isOpen, user?.email]);
@@ -69,11 +74,19 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     }
     
     try {
-      console.log('🔄 Loading company data for:', user.email, 'at', new Date().toISOString());
+      // Use the same logic as login: companyId || ownerEmail || user.email
+      const ownerEmail = user.companyId || user.ownerEmail || user.email;
+      console.log('🔄 Loading company data for:', { 
+        userEmail: user.email,
+        companyId: user.companyId,
+        ownerEmail: user.ownerEmail,
+        finalOwnerEmail: ownerEmail,
+        timestamp: new Date().toISOString()
+      });
       
       // Add cache-busting parameter to force fresh data
       const cacheBuster = `t=${Date.now()}`;
-      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&${cacheBuster}`, {
+      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(ownerEmail)}&${cacheBuster}`, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
@@ -136,12 +149,15 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     setIsLoading(true);
     setError(null);
 
+    // Use the same logic as login: companyId || ownerEmail || user.email
+    const ownerEmail = user.companyId || user.ownerEmail || user.email;
+
     try {
       const response = await fetch('/api/auth/invite-employee', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ownerEmail: user.email,
+          ownerEmail: ownerEmail,
           employeeEmail: inviteData.email,
           employeeName: inviteData.name,
           permissions: inviteData.permissions
@@ -153,8 +169,14 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
       if (response.ok && result.success) {
         console.log('✅ Employee invitation successful, reloading data...');
         
-        // Show immediate feedback
+        // Show immediate feedback and reload company data to show new employee
         setSuccess(`${inviteData.name} is succesvol uitgenodigd!`);
+        
+        // Wait a moment for Blob Storage to sync, then reload data
+        setTimeout(async () => {
+          console.log('🔄 Re-loading company data after invitation...');
+          await loadCompanyData(false); // Don't clear the success message
+        }, 1000);
         
         setShowInviteForm(false);
         setInviteData({
@@ -168,64 +190,10 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
           }
         });
         
-        // Wait for the new employee to appear with retries
-        const checkForNewEmployee = async (attempt = 1, maxAttempts = 10) => {
-          if (attempt > maxAttempts) {
-            console.log('⚠️ Max attempts reached, employee may not appear immediately');
-            await loadCompanyData(false); // Final load attempt
-            return;
-          }
-          
-          console.log(`🔄 Checking for new employee ${result.employee.email} (attempt ${attempt}/${maxAttempts})`);
-          
-          // Wait before checking (Blob Storage needs time to propagate)
-          await new Promise(resolve => setTimeout(resolve, 1000 + (attempt * 500)));
-          
-          try {
-            // Fetch fresh data directly to check
-            const cacheBuster = `t=${Date.now()}`;
-            const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&${cacheBuster}`, {
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-              }
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.success && data.company?.employees) {
-              const employeeEmails = data.company.employees.map((emp: any) => emp.email) || [];
-              const employeeExists = employeeEmails.includes(result.employee.email);
-              
-              if (employeeExists) {
-                console.log(`✅ New employee ${result.employee.email} is now visible! Updating UI...`);
-                // Update the state with the fresh data
-                setCompany(data.company);
-                return;
-              } else {
-                console.log(`⏳ Employee ${result.employee.email} still not visible, retrying...`, {
-                  currentEmployees: employeeEmails,
-                  lookingFor: result.employee.email
-                });
-                await checkForNewEmployee(attempt + 1, maxAttempts);
-              }
-            } else {
-              console.log('❌ Failed to fetch company data for retry:', response.status);
-              await checkForNewEmployee(attempt + 1, maxAttempts);
-            }
-          } catch (error) {
-            console.error('❌ Error checking for new employee:', error);
-            await checkForNewEmployee(attempt + 1, maxAttempts);
-          }
-        };
-        
-        // Start checking for the new employee
-        checkForNewEmployee();
-        
-        // Clear success message after longer delay to account for retries
+        // Clear success message after 5 seconds
         setTimeout(() => {
           setSuccess(null);
-        }, 15000);
+        }, 5000);
       } else {
         setError(result.error || 'Fout bij het uitnodigen van werknemer');
       }
@@ -241,7 +209,10 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     const employee = company?.employees.find(emp => emp.email === employeeEmail);
     const employeeName = employee?.name || employeeEmail;
     
-    console.log('🗑️ Delete button clicked for:', { employeeEmail, employeeName, ownerEmail: user.email });
+    // Use the same logic as login: companyId || ownerEmail || user.email
+    const ownerEmail = user.companyId || user.ownerEmail || user.email;
+    
+    console.log('🗑️ Delete button clicked for:', { employeeEmail, employeeName, ownerEmail });
     
     if (!confirm(`Weet je zeker dat je ${employeeName} (${employeeEmail}) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
       console.log('🗑️ Delete cancelled by user');
@@ -254,9 +225,9 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     setSuccess(null);
 
     try {
-      console.log('🗑️ Attempting to delete employee:', { ownerEmail: user.email, employeeEmail });
+      console.log('🗑️ Attempting to delete employee:', { ownerEmail, employeeEmail });
       
-      const deleteUrl = `/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&employeeEmail=${encodeURIComponent(employeeEmail)}`;
+      const deleteUrl = `/api/auth/company?ownerEmail=${encodeURIComponent(ownerEmail)}&employeeEmail=${encodeURIComponent(employeeEmail)}`;
       console.log('🗑️ Delete URL:', deleteUrl);
       
       const response = await fetch(deleteUrl, { method: 'DELETE' });
@@ -288,52 +259,21 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
         setSuccess(successMessage);
         console.log('✅ Success message set:', successMessage);
         
-        // Verify the deletion was successful with retries
-        const verifyDeletion = async (attempt = 1, maxAttempts = 5) => {
-          if (attempt > maxAttempts) {
-            console.log('⚠️ Max verification attempts reached');
-            return;
-          }
-          
-          console.log(`🔄 Verifying deletion of ${employeeEmail} (attempt ${attempt}/${maxAttempts})`);
-          
-          // Wait a bit for Blob Storage to propagate the deletion
-          await new Promise(resolve => setTimeout(resolve, 1000 + (attempt * 500)));
-          
+        // Reload company data in background to ensure sync (without clearing success message)
+        // Wait a moment for Blob Storage to sync, then reload data
+        setTimeout(async () => {
+          console.log('🔄 Reloading company data in background...');
           try {
-            // Fetch fresh data to verify deletion
-            const cacheBuster = `t=${Date.now()}`;
-            const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&${cacheBuster}`, {
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-              }
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.success && data.company?.employees) {
-              const employeeEmails = data.company.employees.map((emp: any) => emp.email) || [];
-              const stillExists = employeeEmails.includes(employeeEmail);
-              
-              if (!stillExists) {
-                console.log(`✅ Employee ${employeeEmail} deletion confirmed and UI updated`);
-                // Update the state with the confirmed fresh data
-                setCompany(data.company);
-              } else {
-                console.log(`⏳ Employee ${employeeEmail} still exists in data, retrying verification...`);
-                await verifyDeletion(attempt + 1, maxAttempts);
-              }
-            } else {
-              console.log('❌ Failed to fetch company data for verification:', response.status);
-            }
-          } catch (error) {
-            console.error('❌ Error verifying deletion:', error);
+            setIsLoading(true); // Show loading while refreshing
+            await loadCompanyData(false);
+            console.log('✅ Background company data reload completed');
+          } catch (reloadError) {
+            console.warn('⚠️ Background reload failed, but UI was already updated:', reloadError);
+            // UI is already updated, so don't show error to user
+          } finally {
+            setIsLoading(false);
           }
-        };
-        
-        // Start verification process
-        verifyDeletion();
+        }, 1000);
         
         // Clear success message after 5 seconds
         setTimeout(() => {
