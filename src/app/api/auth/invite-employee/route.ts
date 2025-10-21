@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put, list } from '@vercel/blob';
 import bcrypt from 'bcryptjs';
+import { sendEmployeeInvitationEmail } from '@/lib/emailService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if employee account already exists
-    const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace('.', '_dot_')}.json`;
+    const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
     
     try {
       const { blobs } = await list({
@@ -101,16 +102,47 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Employee account created:', employeeEmail);
 
-    // TODO: Send invitation email here with tempPassword or setup link
+    // Get owner info for email
+    let ownerName = 'Eigenaar';
+    try {
+      const ownerBlobKey = `auth-accounts/${ownerEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
+      const { blobs } = await list({
+        prefix: ownerBlobKey,
+        token: process.env.BLOB_READ_WRITE_TOKEN
+      });
+      
+      if (blobs.length > 0) {
+        const ownerResponse = await fetch(blobs[0].url);
+        if (ownerResponse.ok) {
+          const ownerData = await ownerResponse.json();
+          ownerName = ownerData.name || ownerEmail;
+        }
+      }
+    } catch (error) {
+      console.log('Could not fetch owner name:', error);
+    }
+
+    // Send invitation email
+    const loginUrl = `${request.nextUrl.origin}/portal`;
+    const emailSent = await sendEmployeeInvitationEmail({
+      employeeName,
+      employeeEmail,
+      ownerName,
+      ownerEmail,
+      loginUrl
+    });
+
+    if (!emailSent) {
+      console.warn('⚠️ Failed to send invitation email, but employee account was created');
+    }
     
     return NextResponse.json({
       success: true,
-      message: 'Werknemer is uitgenodigd',
+      message: `Werknemer is uitgenodigd${emailSent ? ' en email is verzonden' : ' (email kon niet worden verzonden)'}`,
       employee: {
         email: employeeEmail,
         name: employeeName,
-        needsPasswordReset: true,
-        tempPassword: tempPassword // In production, don't return this - send via email
+        needsPasswordReset: true
       }
     });
 

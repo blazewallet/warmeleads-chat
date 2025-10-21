@@ -21,6 +21,14 @@ export interface OrderConfirmationEmailData {
   invoiceUrl?: string;
 }
 
+export interface EmployeeInvitationEmailData {
+  employeeName: string;
+  employeeEmail: string;
+  ownerName: string;
+  ownerEmail: string;
+  loginUrl: string;
+}
+
 /**
  * Verstuur een bevestigingsmail voor een bestelling
  */
@@ -83,6 +91,51 @@ export async function sendOrderConfirmationEmail(data: OrderConfirmationEmailDat
     }
   } catch (error) {
     console.error('❌ Error sending order confirmation email:', error);
+    return false;
+  }
+}
+
+/**
+ * Verstuur een uitnodigingsmail voor een werknemer
+ */
+export async function sendEmployeeInvitationEmail(data: EmployeeInvitationEmailData): Promise<boolean> {
+  try {
+    console.log('📧 Sending employee invitation email to:', data.employeeEmail);
+    
+    // Check if Resend API key is configured
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️ RESEND_API_KEY not configured, skipping employee invitation email');
+      return false;
+    }
+    
+    const emailHTML = generateEmployeeInvitationHTML(data);
+    const emailText = generateEmployeeInvitationText(data);
+    
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      
+      const { data: emailData, error } = await resend.emails.send({
+        from: 'WarmeLeads <noreply@warmeleads.eu>',
+        to: data.employeeEmail,
+        subject: `Uitnodiging voor WarmeLeads Portal - ${data.ownerName}`,
+        html: emailHTML,
+        text: emailText,
+      });
+      
+      if (error) {
+        console.error('❌ Failed to send employee invitation email:', error);
+        return false;
+      }
+      
+      console.log('✅ Employee invitation email sent successfully to:', data.employeeEmail);
+      return true;
+    } catch (error) {
+      console.error('❌ Resend API error for employee invitation:', error);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Error sending employee invitation email:', error);
     return false;
   }
 }
@@ -329,6 +382,123 @@ function generateOrderConfirmationHTML(data: OrderConfirmationEmailData): string
 </body>
 </html>
   `;
+}
+
+/**
+ * Genereer HTML voor werknemer uitnodigingsmail
+ */
+function generateEmployeeInvitationHTML(data: EmployeeInvitationEmailData): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uitnodiging WarmeLeads Portal</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%); padding: 40px 20px; text-align: center;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: bold;">👥 Welkom bij het Team!</h1>
+      <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">U bent uitgenodigd voor het WarmeLeads Portal</p>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 40px 20px;">
+      <p style="font-size: 16px; color: #374151; line-height: 1.6;">Beste ${data.employeeName},</p>
+      
+      <p style="font-size: 16px; color: #374151; line-height: 1.6;">
+        <strong>${data.ownerName}</strong> heeft u uitgenodigd om toegang te krijgen tot het WarmeLeads Portal. 
+        Via dit portal kunt u leads bekijken en beheren voor uw bedrijf.
+      </p>
+      
+      <!-- What you can do -->
+      <div style="background-color: #f9fafb; border-radius: 12px; padding: 24px; margin: 24px 0;">
+        <h2 style="font-size: 18px; color: #111827; margin: 0 0 16px 0;">🎯 Wat kunt u doen in het portal?</h2>
+        <ul style="color: #374151; margin: 0; padding-left: 20px; line-height: 1.8;">
+          <li>Leads bekijken en bewerken</li>
+          <li>Bestelgeschiedenis inzien</li>
+          <li>Contactgegevens van potentiële klanten beheren</li>
+          <li>Resultaten en statistieken volgen</li>
+        </ul>
+      </div>
+      
+      <!-- Login Button -->
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${data.loginUrl}" style="display: inline-block; background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%); color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3);">
+          🚀 Inloggen op Portal
+        </a>
+      </div>
+      
+      <!-- Login Instructions -->
+      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 12px; padding: 24px; margin: 24px 0;">
+        <h3 style="color: #ffffff; margin: 0 0 12px 0; font-size: 18px;">🔑 Wat gebeurt er bij inloggen?</h3>
+        <ul style="color: #ffffff; margin: 0; padding-left: 20px; line-height: 1.8;">
+          <li>U wordt doorgestuurd naar het inlogscherm</li>
+          <li>Voer uw email adres in: <strong>${data.employeeEmail}</strong></li>
+          <li>U wordt gevraagd uw wachtwoord in te stellen</li>
+          <li>Na het instellen heeft u direct toegang tot alle leads</li>
+        </ul>
+      </div>
+      
+      <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+        <strong>Vragen?</strong> Neem contact op met ${data.ownerName} via ${data.ownerEmail}
+      </p>
+      
+      <p style="font-size: 14px; color: #6b7280; line-height: 1.6; margin-top: 32px;">
+        Met vriendelijke groet,<br>
+        <strong style="color: #111827;">Het WarmeLeads Team</strong>
+      </p>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background-color: #f9fafb; padding: 24px 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+      <p style="font-size: 12px; color: #9ca3af; margin: 0 0 8px 0;">
+        WarmeLeads.eu • KvK: 88929280<br>
+        Stavangerweg 21-1, 9723 JC Groningen
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}
+
+/**
+ * Genereer plain text versie voor werknemer uitnodigingsmail
+ */
+function generateEmployeeInvitationText(data: EmployeeInvitationEmailData): string {
+  return `
+UITNODIGING WARMLEADS PORTAL
+
+Beste ${data.employeeName},
+
+${data.ownerName} heeft u uitgenodigd om toegang te krijgen tot het WarmeLeads Portal.
+
+WAT KUNT U DOEN IN HET PORTAL?
+- Leads bekijken en bewerken
+- Bestelgeschiedenis inzien  
+- Contactgegevens van potentiële klanten beheren
+- Resultaten en statistieken volgen
+
+INLOGGEN:
+Ga naar: ${data.loginUrl}
+
+VOOR HET EERSTE INLOGGEN:
+1. Voer uw email adres in: ${data.employeeEmail}
+2. U wordt gevraagd uw wachtwoord in te stellen
+3. Na het instellen heeft u direct toegang tot alle leads
+
+Vragen? Neem contact op met ${data.ownerName} via ${data.ownerEmail}
+
+Met vriendelijke groet,
+Het WarmeLeads Team
+
+---
+WarmeLeads.eu • KvK: 88929280
+Stavangerweg 21-1, 9723 JC Groningen
+  `.trim();
 }
 
 /**
