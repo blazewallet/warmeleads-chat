@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { CustomerPortal } from '@/components/CustomerPortal';
 import { EmployeeSetupModal } from '@/components/EmployeeSetupModal';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth';
 
-export default function PortalPage() {
+function PortalContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { logout, init, isAuthenticated } = useAuthStore();
@@ -62,5 +62,13 @@ export default function PortalPage() {
         />
       )}
     </>
+  );
+}
+
+export default function PortalPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <PortalContent />
+    </Suspense>
   );
 }

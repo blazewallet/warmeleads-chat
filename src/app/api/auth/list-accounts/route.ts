@@ -4,6 +4,9 @@ import { ADMIN_CONFIG } from '@/config/admin';
 
 const BLOB_STORE_PREFIX = 'auth-accounts';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 // Admin only - list all registered accounts
 export async function GET(request: NextRequest) {
   try {

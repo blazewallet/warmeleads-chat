@@ -133,6 +133,10 @@ class CRMSystem {
 
   private loadFromStorage() {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+      }
       const stored = localStorage.getItem('warmeleads_crm_data');
       if (stored) {
         const { customers, customersByEmail } = JSON.parse(stored);
@@ -171,6 +175,10 @@ class CRMSystem {
 
   private saveToStorage() {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+      }
       const data = {
         customers: Array.from(this.customers.entries()),
         customersByEmail: Array.from(this.customersByEmail.entries())
