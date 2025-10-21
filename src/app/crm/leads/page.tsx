@@ -195,15 +195,28 @@ export default function CustomerLeadsPage() {
     
     let customer: Customer | null = null;
     try {
-      // CRITICAL: Use email as customerId to fetch from Blob Storage
-      const customerId = user?.email;
+      // CRITICAL: For employees, use ownerEmail to get the correct customer data
+      // For owners, use their own email
+      const customerId = user?.role === 'employee' && user?.ownerEmail ? user.ownerEmail : user?.email;
+      
       if (!customerId) {
-        addDebugLog('error', '❌ FATAL: No user email found for customer lookup', { user });
+        addDebugLog('error', '❌ FATAL: No customerId found for lookup', { 
+          userEmail: user?.email,
+          userRole: user?.role,
+          ownerEmail: user?.ownerEmail,
+          user 
+        });
         setIsLoading(false);
         return;
       }
       
-      addDebugLog('info', '📦 STEP 1: Fetching from Blob Storage API', { customerId, endpoint: `/api/customer-data?customerId=${encodeURIComponent(customerId)}` });
+      addDebugLog('info', '📦 STEP 1: Fetching from Blob Storage API', { 
+        customerId, 
+        userRole: user?.role,
+        userEmail: user?.email,
+        ownerEmail: user?.ownerEmail,
+        endpoint: `/api/customer-data?customerId=${encodeURIComponent(customerId)}` 
+      });
       const response = await fetch(`/api/customer-data?customerId=${encodeURIComponent(customerId)}`);
       
       addDebugLog('info', `📦 Blob Storage API Response Status: ${response.status}`, { ok: response.ok, statusText: response.statusText });

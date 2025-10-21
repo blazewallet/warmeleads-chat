@@ -81,6 +81,35 @@ export async function POST(request: NextRequest) {
       });
       
       console.log('✅ Account data saved successfully');
+      
+      // Verify the save was successful by reading it back
+      try {
+        const verifyBlobExists = await head(employeeBlobKey, {
+          token: process.env.BLOB_READ_WRITE_TOKEN,
+        });
+        
+        if (verifyBlobExists) {
+          const verifyResponse = await fetch(verifyBlobExists.url, {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          
+          if (verifyResponse.ok) {
+            const verifyData = await verifyResponse.json();
+            console.log('✅ Verification: Account data persisted correctly', {
+              email: verifyData.email,
+              isActive: verifyData.isActive,
+              needsPasswordReset: verifyData.needsPasswordReset
+            });
+          } else {
+            console.warn('⚠️ Could not verify saved account data:', verifyResponse.status);
+          }
+        }
+      } catch (verifyError) {
+        console.warn('⚠️ Error verifying saved account data:', verifyError);
+      }
 
       // Update company data to mark employee as active
       if (accountData.ownerEmail) {

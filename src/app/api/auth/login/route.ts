@@ -41,9 +41,29 @@ export async function POST(request: NextRequest) {
       
       console.log('✅ Found account blob:', accountBlob.pathname);
       
-      // Fetch account data
-      const response = await fetch(accountBlob.url);
+      // Fetch account data with cache-busting to ensure fresh data
+      const response = await fetch(accountBlob.url, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (!response.ok) {
+        console.log('❌ Failed to fetch account blob data:', response.status);
+        return NextResponse.json(
+          { error: 'Fout bij ophalen account gegevens' },
+          { status: 500 }
+        );
+      }
+      
       const accountData = await response.json();
+      console.log('🔍 Account data loaded:', { 
+        email: accountData.email, 
+        isActive: accountData.isActive,
+        needsPasswordReset: accountData.needsPasswordReset,
+        role: accountData.role
+      });
       
       // Verify password
       const isValidPassword = await bcrypt.compare(password, accountData.password);
@@ -55,7 +75,30 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      console.log('✅ Login successful:', email);
+      // Additional check for employee accounts
+      if (accountData.role === 'employee') {
+        if (!accountData.isActive) {
+          console.log('❌ Employee account not active yet:', email);
+          return NextResponse.json(
+            { error: 'Account is nog niet geactiveerd. Probeer over een paar minuten opnieuw.' },
+            { status: 401 }
+          );
+        }
+        
+        if (accountData.needsPasswordReset) {
+          console.log('❌ Employee account still needs password reset:', email);
+          return NextResponse.json(
+            { error: 'Account setup is nog niet voltooid.' },
+            { status: 401 }
+          );
+        }
+      }
+      
+      console.log('✅ Login successful:', email, { 
+        role: accountData.role, 
+        isActive: accountData.isActive,
+        needsPasswordReset: accountData.needsPasswordReset 
+      });
       
       // Return user data (without password) including employee/role info
       return NextResponse.json({
