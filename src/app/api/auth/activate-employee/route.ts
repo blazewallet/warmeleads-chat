@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('🔑 POST /api/auth/activate-employee - Activating:', email);
+      console.log('🔑 POST /api/auth/activate-employee - Activating:', email);
+      console.log('🔍 Looking for employee blob key:', `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_dot_')}.json`);
 
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       console.error('❌ BLOB_READ_WRITE_TOKEN environment variable is not set');
@@ -65,12 +66,21 @@ export async function POST(request: NextRequest) {
         activatedAt: new Date().toISOString()
       };
 
+      console.log('💾 Saving updated account data:', {
+        email,
+        isActive: true,
+        needsPasswordReset: false,
+        blobKey: employeeBlobKey
+      });
+
       // Save updated account
       await put(employeeBlobKey, JSON.stringify(updatedAccountData, null, 2), {
         access: 'public',
         token: process.env.BLOB_READ_WRITE_TOKEN,
         allowOverwrite: true,
       });
+      
+      console.log('✅ Account data saved successfully');
 
       // Update company data to mark employee as active
       if (accountData.ownerEmail) {

@@ -24,14 +24,22 @@ export async function POST(request: NextRequest) {
         token: process.env.BLOB_READ_WRITE_TOKEN
       });
       
-      const accountBlob = blobs.find(b => b.pathname.includes(email.replace('@', '_at_').replace(/\./g, '_')));
+      const expectedBlobPath = `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
+      console.log('🔍 Looking for account blob:', expectedBlobPath);
+      console.log('📋 Available blobs:', blobs.map(b => b.pathname));
+      
+      const accountBlob = blobs.find(b => b.pathname === expectedBlobPath);
       
       if (!accountBlob) {
+        console.log('❌ Account blob not found for:', email);
+        console.log('🔍 Expected path:', expectedBlobPath);
         return NextResponse.json(
           { error: 'Ongeldig emailadres of wachtwoord' },
           { status: 401 }
         );
       }
+      
+      console.log('✅ Found account blob:', accountBlob.pathname);
       
       // Fetch account data
       const response = await fetch(accountBlob.url);
