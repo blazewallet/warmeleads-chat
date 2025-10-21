@@ -14,11 +14,13 @@ import {
   ClockIcon
 } from '@heroicons/react/24/outline';
 import { getAllCustomers, type Customer } from '@/lib/crmSystem';
+import { ADMIN_CONFIG, getFirstAdminEmail } from '@/config/admin';
 
 // Customer Detail Modal Component
-function CustomerDetailModal({ customer, onClose }: { customer: Customer; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'orders' | 'invoices' | 'notes'>('info');
+function CustomerDetailModal({ customer, onClose, onRefresh }: { customer: Customer; onClose: () => void; onRefresh: () => void }) {
+  const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'orders' | 'invoices' | 'notes' | 'account'>('info');
   const [notes, setNotes] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   return (
     <motion.div
@@ -90,18 +92,19 @@ function CustomerDetailModal({ customer, onClose }: { customer: Customer; onClos
 
         {/* Tabs */}
         <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
+          <nav className="flex space-x-8 px-6 overflow-x-auto">
             {[
               { id: 'info', label: 'Info', icon: UserGroupIcon },
               { id: 'chat', label: `Chat (${customer.chatHistory.length})`, icon: ChatBubbleLeftRightIcon },
               { id: 'orders', label: `Bestellingen (${customer.orders.length})`, icon: DocumentTextIcon },
               { id: 'invoices', label: `Facturen (${customer.openInvoices.length})`, icon: ClockIcon },
-              { id: 'notes', label: 'Notities', icon: DocumentTextIcon }
+              { id: 'notes', label: 'Notities', icon: DocumentTextIcon },
+              ...(customer.hasAccount ? [{ id: 'account', label: 'Account Beheer', icon: UserGroupIcon }] : [])
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-brand-purple text-brand-purple'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -260,6 +263,209 @@ function CustomerDetailModal({ customer, onClose }: { customer: Customer; onClos
               </div>
             </div>
           )}
+
+          {activeTab === 'account' && customer.hasAccount && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-brand-purple/10 to-brand-pink/10 rounded-xl p-6 border border-brand-purple/20">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <span className="text-2xl">👤</span>
+                  Account Beheer
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Account Status */}
+                  <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
+                    <div>
+                      <p className="font-medium text-gray-900">Account Status</p>
+                      <p className="text-sm text-gray-500">Activeer of deactiveer toegang tot het leadportaal</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        customer.hasAccount ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {customer.hasAccount ? '✅ Actief' : '⏸️ Inactief'}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          if (isProcessing) return;
+                          setIsProcessing(true);
+                          
+                          const action = customer.hasAccount ? 'deactivate' : 'activate';
+                          const confirmed = confirm(`Weet je zeker dat je dit account wilt ${action === 'activate' ? 'activeren' : 'deactiveren'}?`);
+                          
+                          if (confirmed) {
+                            try {
+                              const response = await fetch('/api/auth/manage-account', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  action,
+                                  email: customer.email,
+                                  adminEmail: getFirstAdminEmail()
+                                })
+                              });
+
+                              const result = await response.json();
+                              
+                              if (result.success) {
+                                alert(`✅ ${result.message}`);
+                                onRefresh();
+                                onClose();
+                              } else {
+                                alert(`❌ ${result.message || 'Er ging iets mis'}`);
+                              }
+                            } catch (error) {
+                              console.error('Error managing account:', error);
+                              alert('❌ Fout bij het beheren van account');
+                            }
+                          }
+                          
+                          setIsProcessing(false);
+                        }}
+                        disabled={isProcessing}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                          customer.hasAccount
+                            ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                            : 'bg-green-500 hover:bg-green-600 text-white'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {isProcessing ? '⏳ Bezig...' : customer.hasAccount ? '⏸️ Deactiveren' : '✅ Activeren'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Account Info */}
+                  <div className="p-4 bg-white rounded-lg border border-gray-200">
+                    <h4 className="font-medium text-gray-900 mb-3">Account Informatie</h4>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Email:</span>
+                        <span className="font-medium text-gray-900">{customer.email}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Account aangemaakt:</span>
+                        <span className="font-medium text-gray-900">
+                          {customer.accountCreatedAt ? new Date(customer.accountCreatedAt).toLocaleDateString('nl-NL') : 'Onbekend'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Laatste activiteit:</span>
+                        <span className="font-medium text-gray-900">
+                          {new Date(customer.lastActivity).toLocaleDateString('nl-NL')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Leads:</span>
+                        <span className="font-medium text-gray-900">{customer.leadData?.length || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Danger Zone */}
+                  <div className="p-4 bg-red-50 rounded-lg border-2 border-red-200">
+                    <h4 className="font-medium text-red-900 mb-2 flex items-center gap-2">
+                      <span>⚠️</span>
+                      Danger Zone
+                    </h4>
+                    <p className="text-sm text-red-700 mb-4">
+                      Het verwijderen van een account is permanent en kan niet ongedaan worden gemaakt. 
+                      Alle gegevens, leads, en toegang worden volledig verwijderd.
+                    </p>
+                    <button
+                      onClick={async () => {
+                        if (isProcessing) return;
+                        
+                        const confirmed = confirm(
+                          `⚠️ WAARSCHUWING!\n\nWeet je ZEKER dat je het account van ${customer.email} wilt verwijderen?\n\nDit verwijdert:\n- Account toegang\n- Alle opgeslagen data\n- Lead geschiedenis\n\nDeze actie kan NIET ongedaan worden gemaakt!`
+                        );
+                        
+                        if (confirmed) {
+                          const doubleConfirm = confirm(
+                            `Laatste bevestiging!\n\nTyp "VERWIJDEREN" in de volgende prompt om door te gaan.`
+                          );
+                          
+                          if (doubleConfirm) {
+                            const finalConfirm = prompt('Typ "VERWIJDEREN" om door te gaan:');
+                            
+                            if (finalConfirm === 'VERWIJDEREN') {
+                              setIsProcessing(true);
+                              
+                              let deletedFromBlob = false;
+                              let deletedFromLocalStorage = false;
+                              
+                              try {
+                                // First try to delete from Blob Storage
+                                const response = await fetch('/api/auth/manage-account', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    action: 'delete',
+                                    email: customer.email,
+                                    adminEmail: getFirstAdminEmail()
+                                  })
+                                });
+
+                                const result = await response.json();
+                                
+                                if (result.success) {
+                                  console.log(`✅ Deleted from Blob Storage: ${customer.email}`);
+                                  deletedFromBlob = true;
+                                } else {
+                                  console.warn(`⚠️ Not in Blob Storage: ${customer.email}`);
+                                }
+                              } catch (error) {
+                                console.error('Error deleting from Blob Storage:', error);
+                              }
+                              
+                              // Also try to delete from localStorage CRM
+                              try {
+                                const crmData = localStorage.getItem('warmeleads_crm_data');
+                                if (crmData) {
+                                  const crm = JSON.parse(crmData);
+                                  if (crm.customers && Array.isArray(crm.customers)) {
+                                    const originalLength = crm.customers.length;
+                                    crm.customers = crm.customers.filter((c: any) => c.email !== customer.email);
+                                    
+                                    if (crm.customers.length < originalLength) {
+                                      localStorage.setItem('warmeleads_crm_data', JSON.stringify(crm));
+                                      console.log(`✅ Deleted from localStorage CRM: ${customer.email}`);
+                                      deletedFromLocalStorage = true;
+                                    }
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting from localStorage:', error);
+                              }
+                              
+                              setIsProcessing(false);
+                              
+                              // Show appropriate message
+                              if (deletedFromBlob || deletedFromLocalStorage) {
+                                let message = '✅ Account succesvol verwijderd!\n\n';
+                                if (deletedFromBlob) message += '• Verwijderd uit Blob Storage (cross-device)\n';
+                                if (deletedFromLocalStorage) message += '• Verwijderd uit localStorage (dit apparaat)\n';
+                                alert(message);
+                                onRefresh();
+                                onClose();
+                              } else {
+                                alert(`❌ Account niet gevonden in Blob Storage of localStorage.\n\nDeze klant staat mogelijk alleen in de CRM database.`);
+                              }
+                            } else {
+                              alert('❌ Verwijderen geannuleerd');
+                            }
+                          }
+                        }
+                      }}
+                      disabled={isProcessing}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isProcessing ? '⏳ Bezig met verwijderen...' : '🗑️ Account permanent verwijderen'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </motion.div>
     </motion.div>
@@ -274,25 +480,47 @@ export default function CustomersPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'lead' | 'customer' | 'open_invoices'>('all');
 
   useEffect(() => {
-    const loadCustomers = () => {
+    const loadCustomers = async () => {
       try {
+        console.log('🔄 Loading customers from Blob Storage and localStorage...');
+        
+        // 1. Get CRM customers from localStorage (contains lead data, google sheets, etc.)
         const crmCustomers = getAllCustomers();
+        console.log(`📦 Loaded ${crmCustomers.length} customers from CRM (localStorage)`);
         
-        // Sync with auth system - check which customers have accounts
+        // 2. Fetch registered accounts from Blob Storage (cross-device)
+        const registeredEmails = new Set<string>();
+        
+        try {
+          const response = await fetch(`/api/auth/list-accounts?adminEmail=${encodeURIComponent(getFirstAdminEmail())}`);
+          if (response.ok) {
+            const { accounts } = await response.json();
+            console.log(`✅ Fetched ${accounts.length} registered accounts from Blob Storage`);
+            
+            accounts.forEach((account: any) => {
+              if (account.email && !account.isGuest) {
+                registeredEmails.add(account.email);
+              }
+            });
+          } else {
+            console.warn('⚠️ Failed to fetch accounts from Blob Storage, falling back to localStorage');
+          }
+        } catch (error) {
+          console.error('❌ Error fetching accounts from Blob Storage:', error);
+        }
+        
+        // 3. Fallback: Also check localStorage for accounts (backward compatibility)
         const authUsers = JSON.parse(localStorage.getItem('warmeleads-auth-store') || '{}');
-        const registeredEmails = new Set();
-        
-        // Get registered emails from auth system
         if (authUsers.state?.user?.email) {
           registeredEmails.add(authUsers.state.user.email);
         }
         
-        // Also check for Rick's specific email
-        registeredEmails.add('h.schlimback@gmail.com');
-        registeredEmails.add('rick@warmeleads.eu');
-        registeredEmails.add('admin@warmeleads.eu');
+        // Also add all configured admin emails
+        ADMIN_CONFIG.adminEmails.forEach(email => {
+          registeredEmails.add(email);
+        });
         
-        // Check localStorage for other registered users
+        // Check localStorage for other registered users (legacy)
         const authData = localStorage.getItem('auth-users') || '[]';
         try {
           const users = JSON.parse(authData);
@@ -302,10 +530,10 @@ export default function CustomersPage() {
             }
           });
         } catch (e) {
-          console.log('No additional auth users found');
+          console.log('No additional auth users found in localStorage');
         }
         
-        // Update CRM customers with account status
+        // 4. Merge: Update CRM customers with account status from Blob Storage
         const syncedCustomers = crmCustomers.map(customer => {
           const hasAccount = registeredEmails.has(customer.email);
           if (hasAccount && !customer.hasAccount) {
@@ -319,15 +547,47 @@ export default function CustomersPage() {
           return customer;
         });
         
+        // 5. Add accounts that are not yet in CRM
+        registeredEmails.forEach(email => {
+          const existsInCrm = syncedCustomers.some(c => c.email === email);
+          if (!existsInCrm) {
+            console.log(`➕ Adding new account to CRM list: ${email}`);
+            syncedCustomers.push({
+              id: `account-${email}`,
+              email: email,
+              name: email.split('@')[0],
+              hasAccount: true,
+              accountCreatedAt: new Date(),
+              status: 'customer',
+              createdAt: new Date(),
+              lastActivity: new Date(),
+              source: 'direct',
+              leadData: [],
+              orders: [],
+              chatHistory: [],
+              openInvoices: [],
+              dataHistory: [],
+              notes: [],
+              tags: ['registered-account'],
+              whatsappConfig: {
+                enabled: false,
+                phoneNumber: '',
+                notificationTypes: []
+              }
+            } as Customer);
+          }
+        });
+        
         setCustomers(syncedCustomers);
         
-        console.log('📊 Loaded customers with auth sync:', {
+        console.log('📊 Loaded customers with Blob Storage sync:', {
           totalCustomers: syncedCustomers.length,
           withAccounts: syncedCustomers.filter(c => c.hasAccount).length,
+          registeredEmailsCount: registeredEmails.size,
           registeredEmails: Array.from(registeredEmails)
         });
       } catch (error) {
-        console.error('Error loading customers:', error);
+        console.error('❌ Error loading customers:', error);
       } finally {
         setIsLoading(false);
       }
@@ -358,15 +618,131 @@ export default function CustomersPage() {
           </p>
         </div>
         
-        <button
-          onClick={() => {
-            // Force reload to sync auth data
-            window.location.reload();
-          }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          🔄 Sync accounts
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              // Force reload to sync auth data
+              window.location.reload();
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            🔄 Sync accounts
+          </button>
+          
+          <button
+            onClick={() => {
+              // Count localStorage accounts before clearing
+              const authStore = localStorage.getItem('warmeleads-auth-store');
+              const authUsers = localStorage.getItem('auth-users');
+              const crmData = localStorage.getItem('warmeleads_crm_data');
+              
+              let accountCount = 0;
+              let crmCustomerCount = 0;
+              let detailsText = '';
+              
+              try {
+                if (authStore) {
+                  const data = JSON.parse(authStore);
+                  if (data.state?.user) {
+                    accountCount++;
+                    detailsText += `\n- Auth store: ${data.state.user.email}`;
+                  }
+                }
+                
+                if (authUsers) {
+                  const users = JSON.parse(authUsers);
+                  if (Array.isArray(users)) {
+                    accountCount += users.length;
+                    users.forEach((u: any) => {
+                      detailsText += `\n- Legacy auth: ${u.email}`;
+                    });
+                  }
+                }
+                
+                if (crmData) {
+                  const crm = JSON.parse(crmData);
+                  if (crm.customers && Array.isArray(crm.customers)) {
+                    crmCustomerCount = crm.customers.length;
+                    detailsText += `\n- CRM klanten: ${crmCustomerCount} klant(en)`;
+                  }
+                }
+              } catch (e) {
+                console.error('Error counting accounts:', e);
+              }
+              
+              const totalItems = accountCount + (crmCustomerCount > 0 ? 1 : 0); // CRM counts as 1 item
+              
+              if (totalItems === 0) {
+                alert('ℹ️ Er zijn geen accounts of data in localStorage gevonden.');
+                return;
+              }
+              
+              const confirmed = confirm(
+                `⚠️ WAARSCHUWING!\n\nJe staat op het punt om ALLE data uit localStorage te verwijderen.\n\n` +
+                `Gevonden:${detailsText}\n\n` +
+                `Totaal: ${accountCount} account(s) + ${crmCustomerCount} CRM klant(en)\n\n` +
+                `Let op:\n` +
+                `✓ Data wordt ALLEEN uit localStorage verwijderd\n` +
+                `✓ Blob Storage blijft intact (cross-device data blijft bestaan)\n` +
+                `✓ Je moet mogelijk opnieuw inloggen na deze actie\n\n` +
+                `Weet je zeker dat je wilt doorgaan?`
+              );
+              
+              if (!confirmed) {
+                return;
+              }
+              
+              // Double confirmation for safety
+              const doubleConfirm = confirm(
+                `Laatste bevestiging!\n\nType "WISSEN" in de volgende prompt om door te gaan.`
+              );
+              
+              if (!doubleConfirm) {
+                return;
+              }
+              
+              const finalConfirm = prompt('Typ "WISSEN" om alle localStorage accounts te verwijderen:');
+              
+              if (finalConfirm === 'WISSEN') {
+                // Clear all auth-related localStorage
+                const keysToRemove = [
+                  'warmeleads-auth-store',
+                  'auth-users',
+                  'warmeleads_crm_data',
+                  'guest-customer-data'
+                ];
+                
+                let removed = 0;
+                keysToRemove.forEach(key => {
+                  if (localStorage.getItem(key)) {
+                    localStorage.removeItem(key);
+                    removed++;
+                    console.log(`🗑️ Removed from localStorage: ${key}`);
+                  }
+                });
+                
+                console.log(`✅ Cleared ${removed} localStorage items`);
+                alert(
+                  `✅ LocalStorage succesvol gewist!\n\n` +
+                  `${removed} item(s) verwijderd uit localStorage\n` +
+                  `${accountCount} account(s) verwijderd\n` +
+                  `${crmCustomerCount} CRM klant(en) verwijderd\n\n` +
+                  `⚠️ Blob Storage (cross-device) blijft intact\n\n` +
+                  `De pagina wordt nu herladen...`
+                );
+                
+                // Reload to reflect changes
+                window.location.reload();
+              } else {
+                alert('❌ Actie geannuleerd - niets is verwijderd');
+              }
+            }}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            title="Verwijder alle accounts uit localStorage (Blob Storage blijft intact)"
+          >
+            🗑️ Clear localStorage
+          </button>
+        </div>
       </motion.div>
 
       <motion.div
@@ -435,7 +811,11 @@ export default function CustomersPage() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredCustomers.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-gray-50">
+                  <tr 
+                    key={customer.id} 
+                    onClick={() => setSelectedCustomer(customer)}
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center">
                         <div className="w-10 h-10 bg-gradient-to-r from-brand-purple to-brand-pink rounded-full flex items-center justify-center">
@@ -524,7 +904,10 @@ export default function CustomersPage() {
                     <td className="px-6 py-4">
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => setSelectedCustomer(customer)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCustomer(customer);
+                          }}
                           className="text-brand-purple hover:text-brand-pink transition-colors"
                           title="Bekijk details"
                         >
@@ -533,7 +916,8 @@ export default function CustomersPage() {
                         
                         {!customer.hasAccount && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               // Create account for customer
                               const confirmed = confirm(`Account aanmaken voor ${customer.name || customer.email}?`);
                               if (confirmed) {
@@ -551,7 +935,8 @@ export default function CustomersPage() {
                         {customer.hasAccount && (
                           <>
                             <button
-                              onClick={async () => {
+                              onClick={async (e) => {
+                                e.stopPropagation();
                                 const currentUrl = customer.googleSheetUrl || '';
                                 const sheetUrl = prompt(
                                   `Google Sheets URL voor deze klant:\n${currentUrl ? `Huidige URL: ${currentUrl}\n\n` : ''}Voer nieuwe URL in:\n(Bijv: https://docs.google.com/spreadsheets/d/1ABC.../edit)`,
@@ -567,16 +952,24 @@ export default function CustomersPage() {
                                       
                                       console.log('📊 Saving Google Sheets URL to blob storage...');
                                       console.log('Customer ID:', customer.id);
+                                      console.log('Customer Email:', customer.email);
                                       console.log('Google Sheets URL:', sheetUrl);
                                       console.log('Sheet ID:', sheetId);
                                       
-                                      // Save to Vercel Blob Storage
-                                      const response = await fetch('/api/customer-sheets', {
+                                      // Save to Vercel Blob Storage in customer-data (niet customer-sheets!)
+                                      // Gebruik email als customerId voor consistentie
+                                      const response = await fetch('/api/customer-data', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
-                                          customerId: customer.id,
-                                          googleSheetUrl: sheetUrl
+                                          customerId: customer.email, // Gebruik email, niet ID!
+                                          customerData: {
+                                            id: customer.email,
+                                            email: customer.email,
+                                            name: customer.name,
+                                            googleSheetUrl: sheetUrl,
+                                            googleSheetId: sheetId
+                                          }
                                         })
                                       });
 
@@ -650,6 +1043,7 @@ export default function CustomersPage() {
                                 href={customer.googleSheetUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
                                 className="text-blue-600 hover:text-blue-800 transition-colors ml-2"
                                 title="Open Google Sheet"
                               >
@@ -661,6 +1055,7 @@ export default function CustomersPage() {
                         
                         <a
                           href={`mailto:${customer.email}`}
+                          onClick={(e) => e.stopPropagation()}
                           className="text-blue-600 hover:text-blue-800 transition-colors"
                           title="Email versturen"
                         >
@@ -669,6 +1064,7 @@ export default function CustomersPage() {
                         {customer.phone && (
                           <a
                             href={`tel:${customer.phone}`}
+                            onClick={(e) => e.stopPropagation()}
                             className="text-green-600 hover:text-green-800 transition-colors"
                             title="Bellen"
                           >
@@ -690,7 +1086,46 @@ export default function CustomersPage() {
         {selectedCustomer && (
           <CustomerDetailModal 
             customer={selectedCustomer} 
-            onClose={() => setSelectedCustomer(null)} 
+            onClose={() => setSelectedCustomer(null)}
+            onRefresh={async () => {
+              // Reload customers after account management action
+              const loadCustomers = async () => {
+                try {
+                  const crmCustomers = getAllCustomers();
+                  const registeredEmails = new Set<string>();
+                  
+                  try {
+                    const response = await fetch(`/api/auth/list-accounts?adminEmail=${encodeURIComponent(getFirstAdminEmail())}`);
+                    if (response.ok) {
+                      const { accounts } = await response.json();
+                      accounts.forEach((account: any) => {
+                        if (account.email && !account.isGuest) {
+                          registeredEmails.add(account.email);
+                        }
+                      });
+                    }
+                  } catch (error) {
+                    console.error('Error fetching accounts:', error);
+                  }
+                  
+                  const syncedCustomers = crmCustomers.map(customer => {
+                    const hasAccount = registeredEmails.has(customer.email);
+                    if (hasAccount && !customer.hasAccount) {
+                      customer.hasAccount = true;
+                      customer.accountCreatedAt = new Date();
+                      customer.status = 'customer';
+                    }
+                    return customer;
+                  });
+                  
+                  setCustomers(syncedCustomers);
+                } catch (error) {
+                  console.error('Error reloading customers:', error);
+                }
+              };
+              
+              await loadCustomers();
+            }}
           />
         )}
       </AnimatePresence>

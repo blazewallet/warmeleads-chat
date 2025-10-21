@@ -208,49 +208,84 @@ export async function POST(request: NextRequest) {
 
     const blobName = `${BLOB_STORE_PREFIX}/${customerId}.json`;
     
-    // If we're only updating WhatsApp config, get existing customer data first
+    // ALWAYS merge with existing data to prevent data loss
     let dataToStore;
-    if (whatsappConfig && !customerData) {
-      // Only updating WhatsApp config, get existing customer data
-      try {
-        const existingResponse = await fetch(`https://blob.vercel-storage.com/${blobName}`, {
-          headers: {
-            'Authorization': `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`
-          }
-        });
+    try {
+      // Try to get existing data first
+      const { blobs } = await list({
+        prefix: BLOB_STORE_PREFIX,
+        token: process.env.BLOB_READ_WRITE_TOKEN
+      });
+      
+      const matchingBlob = blobs.find(b => b.pathname === blobName || b.pathname.includes(customerId));
+      let existingData = null;
+      
+      if (matchingBlob) {
+        const response = await fetch(matchingBlob.url);
+        if (response.ok) {
+          existingData = await response.json();
+          console.log('📝 Found existing customer data, merging...');
+        }
+      }
+      
+      // Merge with existing data
+      if (existingData) {
+        dataToStore = {
+          ...existingData, // Start with existing data
+          customerId,
+          lastUpdated: new Date().toISOString()
+        };
         
-        if (existingResponse.ok) {
-          const existingData = await existingResponse.json();
+        // Merge WhatsApp config if provided
+        if (whatsappConfig) {
+          dataToStore.whatsappConfig = whatsappConfig;
+          console.log('📝 Merged WhatsApp config');
+        }
+        
+        // Merge customer data if provided
+        if (customerData) {
           dataToStore = {
-            ...existingData,
-            whatsappConfig,
+            ...dataToStore,
+            ...customerData,
+            customerId, // Keep customerId consistent
             lastUpdated: new Date().toISOString()
           };
-          console.log('📝 Updating existing customer data with WhatsApp config');
-        } else {
-          // No existing data, create new with just WhatsApp config
+          console.log('📝 Merged customer data');
+        }
+      } else {
+        // No existing data, create new
+        if (whatsappConfig && !customerData) {
           dataToStore = {
             customerId,
             whatsappConfig,
             lastUpdated: new Date().toISOString()
           };
           console.log('📝 Creating new customer data with WhatsApp config');
+        } else {
+          dataToStore = {
+            ...customerData,
+            customerId,
+            lastUpdated: new Date().toISOString()
+          };
+          console.log('📝 Creating new customer data');
         }
-      } catch (error) {
-        console.log('ℹ️ No existing customer data found, creating new with WhatsApp config');
+      }
+    } catch (error) {
+      console.log('ℹ️ Error fetching existing data, creating new:', error);
+      // Fallback: create new data
+      if (whatsappConfig && !customerData) {
         dataToStore = {
           customerId,
           whatsappConfig,
           lastUpdated: new Date().toISOString()
         };
+      } else {
+        dataToStore = {
+          ...customerData,
+          customerId,
+          lastUpdated: new Date().toISOString()
+        };
       }
-    } else {
-      // Normal customer data update
-      dataToStore = {
-        ...customerData,
-        customerId,
-        lastUpdated: new Date().toISOString()
-      };
     }
 
     console.log('💾 Writing customer data to blob storage:');

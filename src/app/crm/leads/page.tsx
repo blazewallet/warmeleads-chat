@@ -34,7 +34,12 @@ import { type CustomStage, PipelineStagesManager } from '@/lib/pipelineStages';
 
 export default function CustomerLeadsPage() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const { user, isAuthenticated, isLoading: authLoading, init } = useAuthStore();
+  
+  // Initialize auth from localStorage on mount
+  useEffect(() => {
+    init();
+  }, [init]);
   
   // Data loading will be handled by loadCustomerData function
   
@@ -68,6 +73,21 @@ export default function CustomerLeadsPage() {
     enabled: false,
     newLeads: true
   });
+  
+  // Debug logs state
+  const [debugLogs, setDebugLogs] = useState<{timestamp: string, level: string, message: string, data?: any}[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  
+  // Debug logger function
+  const addDebugLog = useCallback((level: 'info' | 'success' | 'warning' | 'error', message: string, data?: any) => {
+    const timestamp = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+    const log = { timestamp, level, message, data };
+    setDebugLogs(prev => [...prev, log]);
+    
+    // Also log to regular console with emoji
+    const emoji = level === 'success' ? '✅' : level === 'error' ? '❌' : level === 'warning' ? '⚠️' : 'ℹ️';
+    console.log(`${emoji} [${timestamp}] ${message}`, data || '');
+  }, []);
 
   // Sync email notifications with customer data
   useEffect(() => {
@@ -170,6 +190,7 @@ export default function CustomerLeadsPage() {
 
   // Load customer data with Google Sheets sync
   const loadCustomerData = async () => {
+    addDebugLog('info', '🔄 LOADING STARTED', { userEmail: user?.email, timestamp: new Date().toISOString() });
     setIsLoading(true);
     
     let customer: Customer | null = null;
@@ -177,49 +198,194 @@ export default function CustomerLeadsPage() {
       // CRITICAL: Use email as customerId to fetch from Blob Storage
       const customerId = user?.email;
       if (!customerId) {
-        console.error('❌ Leads Portal: No user email found for customer lookup');
+        addDebugLog('error', '❌ FATAL: No user email found for customer lookup', { user });
         setIsLoading(false);
         return;
       }
       
-      console.log(`📡 Leads Portal: Fetching customer data for ${customerId}`);
+      addDebugLog('info', '📦 STEP 1: Fetching from Blob Storage API', { customerId, endpoint: `/api/customer-data?customerId=${encodeURIComponent(customerId)}` });
       const response = await fetch(`/api/customer-data?customerId=${encodeURIComponent(customerId)}`);
+      
+      addDebugLog('info', `📦 Blob Storage API Response Status: ${response.status}`, { ok: response.ok, statusText: response.statusText });
       
       if (response.ok) {
         const data = await response.json();
-        console.log('📡 Leads Portal: API response:', data);
+        addDebugLog('info', '📦 Blob Storage API Response Data', { 
+          hasSuccess: !!data.success, 
+          hasCustomerData: !!data.customerData,
+          hasCustomer: !!data.customer,
+          dataKeys: Object.keys(data)
+        });
+        
+        // Log the actual customer data to see what's inside
+        if (data.customerData) {
+          addDebugLog('info', '📦 RAW customerData from Blob Storage', {
+            customerDataKeys: Object.keys(data.customerData),
+            id: data.customerData.id,
+            email: data.customerData.email,
+            googleSheetUrl: data.customerData.googleSheetUrl,
+            hasLeadData: !!data.customerData.leadData,
+            leadDataLength: data.customerData.leadData?.length,
+            leadDataType: typeof data.customerData.leadData,
+            isArray: Array.isArray(data.customerData.leadData),
+            fullCustomerDataSample: {
+              id: data.customerData.id,
+              email: data.customerData.email,
+              name: data.customerData.name,
+              googleSheetUrl: data.customerData.googleSheetUrl
+            }
+          });
+        }
         
         // Handle different response structures
         if (data.success && data.customerData) {
-          customer = data.customerData;
-          console.log('✅ Leads Portal: Customer data fetched from Blob Storage');
-          console.log('  googleSheetUrl:', customer?.googleSheetUrl);
+          const rawCustomerData = data.customerData;
+          
+          // Check if we have Google Sheets URL but no full customer data (only WhatsApp config)
+          if (rawCustomerData.googleSheetUrl && !rawCustomerData.id && !rawCustomerData.email) {
+            // We have Google Sheets URL but customer data is incomplete, create minimal customer
+            addDebugLog('info', '📊 BLOB STORAGE: Found Google Sheets URL in incomplete customer data', {
+              hasGoogleSheetUrl: !!rawCustomerData.googleSheetUrl,
+              googleSheetUrl: rawCustomerData.googleSheetUrl?.substring(0, 50) + '...'
+            });
+            
+            customer = {
+              id: customerId,
+              email: customerId,
+              name: customerId.split('@')[0],
+              createdAt: new Date(),
+              lastActivity: new Date(),
+              status: 'customer' as const,
+              source: 'direct' as const,
+              chatHistory: [],
+              orders: [],
+              openInvoices: [],
+              dataHistory: [],
+              hasAccount: true,
+              googleSheetUrl: rawCustomerData.googleSheetUrl,
+              leadData: []
+            };
+          } else if (!rawCustomerData.id && !rawCustomerData.email) {
+            // No valid customer data at all
+            addDebugLog('error', '❌ BLOB STORAGE: Customer data is empty/corrupt', { 
+              customerData: rawCustomerData,
+              hasId: !!rawCustomerData.id,
+              hasEmail: !!rawCustomerData.email,
+              hasGoogleSheetUrl: !!rawCustomerData.googleSheetUrl
+            });
+            customer = null; // Force fallback
+          } else {
+            // Valid customer data
+            customer = rawCustomerData;
+            addDebugLog('success', '✅ BLOB STORAGE: Customer loaded', { 
+              customerId: customer?.id || 'unknown',
+              leadsCount: customer?.leadData?.length || 0,
+              googleSheetUrl: customer?.googleSheetUrl ? 'present' : 'missing',
+              customerHasId: !!customer?.id,
+              customerEmail: customer?.email
+            });
+          }
         } else if (data.customer) {
           customer = data.customer;
-          console.log('✅ Leads Portal: Customer data fetched (legacy structure)');
+          addDebugLog('success', '✅ BLOB STORAGE: Customer loaded (legacy structure)', { 
+            leadsCount: customer?.leadData?.length || 0 
+          });
         } else {
-          console.log('ℹ️ Leads Portal: Unexpected API response structure, falling back to localStorage.');
-          const allCustomers = crmSystem.getAllCustomers();
-          customer = allCustomers.find(c => c.email === user?.email) || null;
+          addDebugLog('warning', '⚠️ BLOB STORAGE: Unexpected response', { responseData: data });
         }
         
+        // If still no valid customer, try to get Google Sheets URL from dedicated API
         if (!customer) {
-          console.log('ℹ️ Leads Portal: Customer not found in API response, falling back to localStorage.');
+          addDebugLog('warning', '⚠️ BLOB STORAGE: No valid customer, trying /api/customer-sheets', {});
+          
+          // Also check if WhatsApp config has the customerId that was used in admin
+          const blobCustomerId = (data.customerData as any)?.customerId;
+          addDebugLog('info', '🔍 Checking customer IDs', {
+            userEmail: customerId,
+            blobCustomerId: blobCustomerId,
+            areTheSame: customerId === blobCustomerId
+          });
+          
+          try {
+            // Try with user email first
+            const sheetsResponse = await fetch(`/api/customer-sheets?customerId=${encodeURIComponent(customerId)}`);
+            addDebugLog('info', `📊 STEP 1.5: Fetching Google Sheets URL (with user email)`, { 
+              customerId: customerId,
+              status: sheetsResponse.status,
+              ok: sheetsResponse.ok 
+            });
+            
+            if (sheetsResponse.ok) {
+              const sheetsData = await sheetsResponse.json();
+              addDebugLog('success', '✅ GOOGLE SHEETS URL: Found in customer-sheets API', { 
+                hasUrl: !!sheetsData.googleSheetUrl,
+                url: sheetsData.googleSheetUrl?.substring(0, 50) + '...'
+              });
+              
+              // Create customer with Google Sheets URL
+              if (sheetsData.googleSheetUrl) {
+                customer = {
+                  id: customerId,
+                  email: customerId,
+                  name: customerId.split('@')[0],
+                  createdAt: new Date(),
+                  lastActivity: new Date(),
+                  status: 'customer' as const,
+                  source: 'direct' as const,
+                  chatHistory: [],
+                  orders: [],
+                  openInvoices: [],
+                  dataHistory: [],
+                  hasAccount: true,
+                  googleSheetUrl: sheetsData.googleSheetUrl,
+                  leadData: []
+                };
+                addDebugLog('info', '🔨 CREATED: Customer object with Google Sheets URL', {
+                  hasCustomer: !!customer,
+                  hasGoogleSheetUrl: !!customer.googleSheetUrl
+                });
+              }
+            } else {
+              addDebugLog('warning', '⚠️ GOOGLE SHEETS URL: Not found in customer-sheets API', { 
+                status: sheetsResponse.status 
+              });
+            }
+          } catch (error) {
+            addDebugLog('error', '❌ GOOGLE SHEETS URL: Error fetching', { 
+              error: error instanceof Error ? error.message : 'Unknown error' 
+            });
+          }
+          
+          // If still no customer, try localStorage
+          if (!customer) {
+            addDebugLog('warning', '⚠️ Falling back to localStorage', {});
           const allCustomers = crmSystem.getAllCustomers();
           customer = allCustomers.find(c => c.email === user?.email) || null;
+            addDebugLog('info', '💾 LOCAL STORAGE: Search result', { 
+              found: !!customer, 
+              totalCustomers: allCustomers.length,
+              customerData: customer ? {
+                id: customer.id,
+                email: customer.email,
+                hasGoogleSheet: !!customer.googleSheetUrl,
+                leadsCount: customer.leadData?.length || 0
+              } : null
+            });
+          }
         }
       } else {
-        console.error(`❌ Leads Portal: API fetch failed with status ${response.status}`);
         const errorData = await response.json().catch(() => ({}));
-        console.error('  Error:', errorData);
+        addDebugLog('error', `❌ BLOB STORAGE: API failed (${response.status})`, { status: response.status, errorData });
         
         // Fallback to localStorage if API fails or no data
+        addDebugLog('info', '💾 Falling back to localStorage due to API failure', {});
         const allCustomers = crmSystem.getAllCustomers();
         customer = allCustomers.find(c => c.email === user?.email) || null;
+        addDebugLog('info', '💾 LOCAL STORAGE: Search result', { found: !!customer, totalCustomers: allCustomers.length });
       }
 
       if (!customer) {
-        console.log('ℹ️ Leads Portal: Customer not found in any source, creating fallback customer.');
+        addDebugLog('warning', '⚠️ NO CUSTOMER: Creating fallback customer', { userEmail: user?.email });
         // Create a minimal fallback customer to prevent crashes
         customer = {
           id: user?.email || 'unknown',
@@ -248,16 +414,22 @@ export default function CustomerLeadsPage() {
 
       // 🔄 CRITICAL: Always sync with Google Sheets for fresh data
       if (customer.googleSheetUrl) {
-        console.log('🔄 Leads Portal: Syncing with Google Sheets for fresh data...');
+        addDebugLog('info', '📊 STEP 2: Syncing with Google Sheets', { googleSheetUrl: customer.googleSheetUrl });
         try {
           const freshLeads = await readCustomerLeads(customer.googleSheetUrl);
+          addDebugLog('success', `✅ GOOGLE SHEETS: Successfully read ${freshLeads.length} leads`, { 
+            leadsCount: freshLeads.length,
+            firstLeadName: freshLeads[0]?.name || 'none',
+            sampleLead: freshLeads[0] ? { name: freshLeads[0].name, createdAt: freshLeads[0].createdAt, hasCreatedAt: !!freshLeads[0].createdAt } : null
+          });
           
           // Update customer with fresh leads
           customer.leadData = freshLeads;
-          console.log(`✅ Leads Portal: Synced ${freshLeads.length} fresh leads from Google Sheets`);
+          addDebugLog('info', '📊 Updated customer.leadData with fresh Google Sheets data', { leadsCount: customer.leadData.length });
           
           // Update blob storage with fresh data
           try {
+            addDebugLog('info', '💾 STEP 3: Updating Blob Storage with fresh data', {});
             await fetch('/api/customer-data', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -266,35 +438,52 @@ export default function CustomerLeadsPage() {
                 customerData: customer
               })
             });
-            console.log('✅ Leads Portal: Updated blob storage with fresh data');
+            addDebugLog('success', '✅ BLOB STORAGE: Successfully updated with Google Sheets data', {});
           } catch (blobError) {
-            console.error('❌ Leads Portal: Failed to update blob storage:', blobError);
+            addDebugLog('error', '❌ BLOB STORAGE: Failed to update', { error: blobError });
           }
         } catch (syncError) {
-          console.error('❌ Leads Portal: Google Sheets sync failed:', syncError);
+          addDebugLog('error', '❌ GOOGLE SHEETS: Sync failed', { error: syncError, message: syncError instanceof Error ? syncError.message : 'Unknown error' });
           
           // Show user-friendly error message for API key issues
           if (syncError instanceof Error && syncError.message.includes('API key')) {
-            console.warn('⚠️ Google Sheets API key issue detected. Please check API configuration.');
+            addDebugLog('warning', '⚠️ GOOGLE SHEETS: API key issue detected', {});
           }
           
           // Continue with existing data if sync fails
+          addDebugLog('info', '📊 Continuing with existing customer data', { existingLeadsCount: customer.leadData?.length || 0 });
         }
+      } else {
+        addDebugLog('info', '📊 No Google Sheet URL configured, skipping sync', {});
       }
+
+      addDebugLog('info', '🎯 STEP 4: Setting customer data and leads state', { 
+        customerId: customer.id,
+        leadsCount: customer.leadData?.length || 0,
+        hasLeadData: !!customer.leadData,
+        leadDataType: Array.isArray(customer.leadData) ? 'array' : typeof customer.leadData
+      });
 
       setCustomerData(customer);
       setLeads(customer.leadData || []);
+      addDebugLog('success', '✅ STATE UPDATED: setCustomerData and setLeads called', { leadsSet: customer.leadData?.length || 0 });
       
       // Generate branch analytics
       if (customer.leadData && customer.leadData.length > 0) {
         const analytics = branchIntelligence.analyzeBranchPerformance(customer.leadData);
         setBranchAnalytics(analytics);
+        addDebugLog('info', '📊 Branch analytics generated', { analyticsCount: analytics.length });
+      } else {
+        addDebugLog('info', '📊 No leads for branch analytics', { leadsCount: customer.leadData?.length || 0 });
       }
       
       setIsLoading(false);
-      console.log('✅ Leads Portal: Data loaded successfully');
+      addDebugLog('success', '✅ LOADING COMPLETE: All data loaded successfully', { 
+        finalLeadsCount: customer.leadData?.length || 0,
+        isLoading: false
+      });
     } catch (error) {
-      console.error('❌ Leads Portal: Error loading data:', error);
+      addDebugLog('error', '❌ FATAL ERROR in loadCustomerData', { error, message: error instanceof Error ? error.message : 'Unknown error', stack: error instanceof Error ? error.stack : undefined });
       setIsLoading(false);
     }
   };
@@ -506,15 +695,17 @@ export default function CustomerLeadsPage() {
     };
   }, [leads, searchTerm, filterStatus, filterBranch, currentPage, leadsPerPage]);
 
-  // Calculate statistics based on filtered leads
+  // Calculate statistics based on filtered leads - include both converted and deal_closed
   const stats = {
     total: filteredLeads.length,
     new: filteredLeads.filter(l => l.status === 'new').length,
     contacted: filteredLeads.filter(l => l.status === 'contacted').length,
     qualified: filteredLeads.filter(l => l.status === 'qualified').length,
-    converted: filteredLeads.filter(l => l.status === 'converted').length,
+    // Converted includes both 'converted' and 'deal_closed' statuses
+    converted: filteredLeads.filter(l => l.status === 'converted' || l.status === 'deal_closed').length,
     lost: leads.filter(l => l.status === 'lost').length,
-    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted').length / leads.length * 100) : 0
+    // Conversion rate based on both converted and deal_closed
+    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted' || l.status === 'deal_closed').length / leads.length * 100) : 0
   };
 
   const getStatusColor = (status: Lead['status']) => {
@@ -534,7 +725,7 @@ export default function CustomerLeadsPage() {
       case 'proposal': return 'bg-indigo-100 text-indigo-800';
       case 'negotiation': return 'bg-orange-100 text-orange-800';
       case 'converted': return 'bg-green-100 text-green-800';
-      case 'geclosed': return 'bg-emerald-100 text-emerald-800';
+      case 'deal_closed': return 'bg-emerald-100 text-emerald-800';
       case 'lost': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -555,20 +746,185 @@ export default function CustomerLeadsPage() {
       case 'proposal': return '📄';
       case 'negotiation': return '🤝';
       case 'converted': return '✅';
-      case 'geclosed': return '💰';
+      case 'deal_closed': return '💰';
       case 'lost': return '❌';
       default: return '❓';
     }
   };
 
-  const handleUpdateLeadStatus = (leadId: string, newStatus: Lead['status']) => {
-    if (customerData) {
-      const success = crmSystem.updateCustomerLead(customerData.id, leadId, { status: newStatus });
-      if (success) {
+  // State for deal value modal
+  const [showDealValueModal, setShowDealValueModal] = useState<{
+    show: boolean;
+    leadId: string;
+    newStatus: Lead['status'];
+  }>({ show: false, leadId: '', newStatus: 'new' });
+
+  // Handle status update with Google Sheets sync
+  const handleUpdateLeadStatus = async (leadId: string, newStatus: Lead['status']) => {
+    console.log(`📝 Status update: ${leadId} -> ${newStatus}`);
+    
+    // Als status "deal gesloten" is, toon modal voor omzet en winst
+    if (newStatus === 'deal_closed') {
+      setShowDealValueModal({ show: true, leadId, newStatus });
+      return; // Stop hier, modal zal de update afhandelen
+    }
+    
+    if (!customerData) {
+      console.error('❌ handleUpdateLeadStatus: No customerData available');
+      return;
+    }
+    
+    // Find the lead in current state
+    const leadToUpdate = leads.find(l => l.id === leadId);
+    if (!leadToUpdate) {
+      console.error('❌ handleUpdateLeadStatus: Lead not found in state', { leadId });
+      return;
+    }
+    
+    // Create updated lead object
+    const updatedLead = {
+      ...leadToUpdate,
+      status: newStatus,
+      updatedAt: new Date()
+    };
+    
+    // Update local state immediately for responsive UI
         setLeads(prev => prev.map(lead => 
-          lead.id === leadId ? { ...lead, status: newStatus, updatedAt: new Date() } : lead
-        ));
+      lead.id === leadId ? updatedLead : lead
+    ));
+    
+    // Update in customerData
+    const updatedCustomerData = {
+      ...customerData,
+      leadData: customerData.leadData?.map(lead => 
+        lead.id === leadId ? updatedLead : lead
+      ),
+      lastActivity: new Date()
+    };
+    
+    setCustomerData(updatedCustomerData);
+    console.log('✅ Status update: Updated local state');
+    
+    // Sync to Blob Storage for cross-device persistence
+    try {
+      console.log('💾 Status update: Syncing to Blob Storage...');
+      await fetch('/api/customer-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customerData.email || customerData.id,
+          customerData: updatedCustomerData
+        })
+      });
+      console.log('✅ Status update: Synced to Blob Storage');
+    } catch (error) {
+      console.error('❌ Status update: Blob Storage sync failed:', error);
+    }
+    
+    // Sync to Google Sheets if available (using Service Account)
+    if (customerData.googleSheetUrl && updatedLead.sheetRowNumber) {
+      try {
+        console.log('📊 Status update: Syncing to Google Sheets via Service Account...');
+        await updateLeadInSheet(customerData.googleSheetUrl, updatedLead);
+        console.log('✅ Status update: Synced to Google Sheets via Service Account');
+      } catch (error) {
+        console.error('❌ Status update: Google Sheets sync failed:', error);
       }
+    } else {
+      console.warn('⚠️ Status update: Cannot sync to Google Sheets', {
+        hasSheetUrl: !!customerData.googleSheetUrl,
+        hasRowNumber: !!updatedLead.sheetRowNumber
+      });
+    }
+  };
+  
+  // Handle closing deal with omzet and profit
+  const handleCloseDeal = async (leadId: string, newStatus: Lead['status'], dealValue?: number, profit?: number) => {
+    console.log(`💰 Closing deal: ${leadId} -> ${newStatus}, omzet: €${dealValue}, winst: €${profit}`);
+    
+    if (!customerData) {
+      console.error('❌ handleCloseDeal: No customerData available');
+      return;
+    }
+    
+    const updates: Partial<Lead> = {
+      status: newStatus,
+      updatedAt: new Date()
+    };
+    
+    if (dealValue !== undefined) updates.dealValue = dealValue;
+    if (profit !== undefined) updates.profit = profit;
+    
+    console.log('📋 handleCloseDeal: Updates prepared:', updates);
+    
+    // Find the lead in current state
+    const leadToUpdate = leads.find(l => l.id === leadId);
+    if (!leadToUpdate) {
+      console.error('❌ handleCloseDeal: Lead not found in state', { leadId });
+      return;
+    }
+    
+    // Create updated lead object
+    const updatedLead = {
+      ...leadToUpdate,
+      ...updates
+    };
+    
+    // Update local state immediately
+    setLeads(prev => prev.map(lead => 
+      lead.id === leadId ? updatedLead : lead
+    ));
+    
+    // Update in customerData
+    const updatedCustomerData = {
+      ...customerData,
+      leadData: customerData.leadData?.map(lead => 
+        lead.id === leadId ? updatedLead : lead
+      ),
+      lastActivity: new Date()
+    };
+    
+    setCustomerData(updatedCustomerData);
+    console.log('✅ Deal closed: Updated local state');
+    
+    // Sync to Blob Storage
+    try {
+      await fetch('/api/customer-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customerData.email || customerData.id,
+          customerData: updatedCustomerData
+        })
+      });
+      console.log('✅ Deal closed: Synced to Blob Storage');
+    } catch (error) {
+      console.error('❌ Deal closed: Blob Storage sync failed:', error);
+    }
+    
+    // Sync to Google Sheets if available (using Service Account)
+    if (customerData.googleSheetUrl && updatedLead.sheetRowNumber) {
+      console.log('🔄 Deal closed: Attempting Google Sheets sync via Service Account...', {
+        hasSheetUrl: !!customerData.googleSheetUrl,
+        leadId,
+        sheetRowNumber: updatedLead.sheetRowNumber,
+        status: updatedLead.status,
+        dealValue: updatedLead.dealValue,
+        profit: updatedLead.profit
+      });
+      
+      try {
+        // Call updateLeadInSheet - this uses the Service Account by default
+        await updateLeadInSheet(customerData.googleSheetUrl, updatedLead);
+        console.log('✅ Deal closed: Successfully synced to Google Sheets via Service Account');
+      } catch (error) {
+        console.error('❌ Deal closed: Google Sheets sync failed:', error);
+      }
+    } else {
+      console.warn('⚠️ Deal closed: Cannot sync to Google Sheets', {
+        hasSheetUrl: !!customerData.googleSheetUrl,
+        hasRowNumber: !!updatedLead.sheetRowNumber
+      });
     }
   };
 
@@ -577,20 +933,25 @@ export default function CustomerLeadsPage() {
     console.log(`🔄 Pipeline: Updating lead ${leadId} with:`, updates);
     
     if (customerData) {
-      const success = crmSystem.updateCustomerLead(customerData.id, leadId, updates);
-      if (success) {
-        // Update local state immediately
+      // CRITICAL: Always update local state first, regardless of crmSystem success
         const updatedLeads = leads.map(lead => 
           lead.id === leadId ? { ...lead, ...updates, updatedAt: new Date() } : lead
         );
         setLeads(updatedLeads);
         
-        // Get updated customer data with new lead status
-        const updatedCustomer = crmSystem.getCustomerById(customerData.id);
-        if (updatedCustomer) {
-          setCustomerData(updatedCustomer);
+      // Try to update crmSystem (might fail if lead not found in legacy storage)
+      crmSystem.updateCustomerLead(customerData.id, leadId, updates);
           
           // CRITICAL: Save to Blob Storage for cross-device persistence
+      // We need to construct an updated customer object with the new lead data
+      const updatedCustomerData = {
+        ...customerData,
+        leadData: updatedLeads,
+        lastActivity: new Date()
+      };
+      
+      setCustomerData(updatedCustomerData);
+      
           try {
             console.log('💾 Pipeline: Syncing lead update to Blob Storage...');
             const response = await fetch('/api/customer-data', {
@@ -598,7 +959,7 @@ export default function CustomerLeadsPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customerId: customerData.email, // Use email as customerId for Blob Storage API
-                customerData: updatedCustomer
+            customerData: updatedCustomerData
               })
             });
             
@@ -611,26 +972,43 @@ export default function CustomerLeadsPage() {
             console.error('❌ Pipeline: Error syncing to Blob Storage:', error);
           }
           
-          // Also sync to Google Sheet if available
-          if (updatedCustomer.googleSheetUrl) {
-            try {
-              const updatedLead = updatedLeads.find(l => l.id === leadId);
-              if (updatedLead && updatedLead.sheetRowNumber) {
-                console.log('📊 Pipeline: Syncing lead update to Google Sheet...');
+      // CRITICAL: Also sync to Google Sheet if available
+      const googleSheetUrl = customerData.googleSheetUrl;
+      console.log('🔍 Google Sheet URL check:', { 
+        hasUrl: !!googleSheetUrl
+      });
+      
+      if (googleSheetUrl) {
+        try {
+          // Find the updated lead with sheetRowNumber
+          const existingLead = updatedLeads.find(l => l.id === leadId);
+          if (existingLead && existingLead.sheetRowNumber) {
+            // Create complete lead object with all updates applied
+            const completeUpdatedLead = { ...existingLead };
+            
+            console.log('📊 Syncing lead update to Google Sheet...');
+            console.log('📊 Complete lead data:', completeUpdatedLead);
+            
                 await updateLeadInSheet(
-                  updatedCustomer.googleSheetUrl,
-                  updatedLead
-                );
-                console.log(`✅ Pipeline: Lead ${leadId} synced to Google Sheet`);
+              googleSheetUrl,
+              completeUpdatedLead
+            );
+            console.log(`✅ Lead ${leadId} synced to Google Sheet (row ${existingLead.sheetRowNumber})`);
+          } else {
+            console.warn(`⚠️ Cannot sync to Google Sheets: missing sheetRowNumber for lead ${leadId}`, {
+              hasExistingLead: !!existingLead,
+              sheetRowNumber: existingLead?.sheetRowNumber
+            });
               }
             } catch (sheetError) {
-              console.error('❌ Pipeline: Failed to sync to Google Sheet:', sheetError);
+          console.error('❌ Failed to sync to Google Sheet:', sheetError);
+          // Don't throw - we still want the local update to succeed
             }
-          }
+      } else {
+        console.warn('⚠️ No Google Sheet URL found - skipping sheet sync');
         }
         
         console.log(`✅ Pipeline: Lead ${leadId} updated successfully`);
-      }
     }
   };
 
@@ -962,6 +1340,7 @@ export default function CustomerLeadsPage() {
           </div>
         </div>
       </div>
+
 
       {/* Main Content - Conditional container */}
       {viewMode === 'pipeline' ? (
@@ -1367,7 +1746,7 @@ export default function CustomerLeadsPage() {
                           <div className="flex items-center space-x-2 mt-1">
                             <span className="text-xs text-gray-400">Rij {lead.sheetRowNumber}</span>
                             <span className="text-xs text-gray-300">•</span>
-                            <span className="text-xs text-gray-400">{new Date(lead.updatedAt).toLocaleDateString('nl-NL')}</span>
+                            <span className="text-xs text-gray-400">{new Date(lead.createdAt).toLocaleDateString('nl-NL')}</span>
                           </div>
                           
                           {/* 🧠 AI Branch Detection Badge */}
@@ -1641,7 +2020,7 @@ export default function CustomerLeadsPage() {
                           ))}
                         </select>
                         <div className="text-xs text-gray-500 mt-1">
-                          Bijgewerkt: {new Date(lead.updatedAt).toLocaleDateString('nl-NL')}
+                          Datum: {new Date(lead.createdAt).toLocaleDateString('nl-NL')}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -2075,7 +2454,7 @@ export default function CustomerLeadsPage() {
         )}
       </AnimatePresence>
 
-      {/* Lead Edit Modal */}
+      {/* Lead Edit Modal - Full Edit */}
       <AnimatePresence>
         {editingLead && (
           <motion.div
@@ -2094,35 +2473,191 @@ export default function CustomerLeadsPage() {
             >
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">Lead Bewerken</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">Lead bewerken</h3>
                   <button
                     onClick={() => setEditingLead(null)}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
                   >
                     ✕
                   </button>
                 </div>
-                <p className="text-gray-600 mb-4">Bewerk de gegevens van {editingLead.name}</p>
-                <div className="space-y-4">
+                <p className="text-gray-600 mb-6">Wijzigingen worden automatisch gesynchroniseerd met Google Sheets</p>
+                
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  
+                  if (!customerData) return;
+                  
+                  try {
+                    // Update updatedAt timestamp
+                    const updatedLead = { ...editingLead, updatedAt: new Date() };
+                    
+                    console.log('📝 Edit Modal: Saving lead:', updatedLead.name, updatedLead.id);
+                    
+                    // Update in local state FIRST for immediate UI refresh
+                            setLeads(prev => prev.map(lead => 
+                      lead.id === updatedLead.id ? updatedLead : lead
+                    ));
+                    
+                    // Update in CRM system (localStorage)
+                    const updateSuccess = crmSystem.updateCustomerLead(customerData.id, updatedLead.id, {
+                      name: updatedLead.name,
+                      email: updatedLead.email,
+                      phone: updatedLead.phone,
+                      budget: updatedLead.budget,
+                      notes: updatedLead.notes,
+                      status: updatedLead.status,
+                      dealValue: updatedLead.dealValue,
+                      profit: updatedLead.profit,
+                      branchData: updatedLead.branchData,
+                      updatedAt: updatedLead.updatedAt
+                    });
+                    
+                    if (!updateSuccess) {
+                      console.warn('⚠️ CRM update returned false, but continuing with sync...');
+                    }
+                    
+                    // Get updated customer for blob sync
+                    const updatedCustomer = crmSystem.getCustomerById(customerData.id);
+                    if (updatedCustomer) {
+                      // Sync to Blob Storage
+                      try {
+                        console.log('💾 Edit Modal: Syncing to Blob Storage...');
+                        await fetch('/api/customer-data', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            customerId: customerData.email,
+                            customerData: updatedCustomer
+                          })
+                        });
+                        console.log('✅ Edit Modal: Synced to Blob Storage');
+                      } catch (blobError) {
+                        console.error('❌ Edit Modal: Blob Storage sync failed:', blobError);
+                      }
+                    }
+                    
+                    // Sync to Google Sheets if URL is configured
+                    if (customerData.googleSheetUrl && updatedLead.sheetRowNumber) {
+                      try {
+                        console.log('📊 Edit Modal: Syncing to Google Sheets...');
+                        console.log('📊 Sheet URL:', customerData.googleSheetUrl);
+                        console.log('📊 Row number:', updatedLead.sheetRowNumber);
+                        console.log('📊 Lead data:', {
+                          name: updatedLead.name,
+                          phone: updatedLead.phone,
+                          email: updatedLead.email,
+                          branchData: updatedLead.branchData
+                        });
+                        
+                        await updateLeadInSheet(customerData.googleSheetUrl, updatedLead);
+                        console.log('✅ Edit Modal: Synced to Google Sheets');
+                      } catch (sheetError) {
+                        console.error('❌ Edit Modal: Google Sheets sync failed:', sheetError);
+                      }
+                    } else {
+                      console.warn('⚠️ Edit Modal: Cannot sync to Google Sheets', {
+                        hasSheetUrl: !!customerData.googleSheetUrl,
+                        hasRowNumber: !!updatedLead.sheetRowNumber
+                      });
+                    }
+                    
+                    console.log('✅ Edit Modal: All syncs complete');
+                    
+                    // Close modal
+                    setEditingLead(null);
+                  } catch (error) {
+                    console.error('❌ Edit Modal: Error updating lead:', error);
+                    alert('❌ Fout bij bijwerken van lead: ' + (error as Error).message);
+                  }
+                }}
+                className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Naam *</label>
+                      <input
+                        type="text"
+                        value={editingLead.name}
+                        onChange={(e) => setEditingLead({ ...editingLead, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                      <input
+                        type="email"
+                        value={editingLead.email || ''}
+                        onChange={(e) => setEditingLead({ ...editingLead, email: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Telefoon</label>
+                      <input
+                        type="tel"
+                        value={editingLead.phone || ''}
+                        onChange={(e) => setEditingLead({ ...editingLead, phone: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Postcode</label>
+                      <input
+                        type="text"
+                        value={editingLead.branchData?.postcode || ''}
+                        onChange={(e) => setEditingLead({ 
+                          ...editingLead, 
+                          branchData: { ...editingLead.branchData, postcode: e.target.value }
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Huisnummer</label>
+                      <input
+                        type="text"
+                        value={editingLead.branchData?.huisnummer || ''}
+                        onChange={(e) => setEditingLead({ 
+                          ...editingLead, 
+                          branchData: { ...editingLead.branchData, huisnummer: e.target.value }
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Plaatsnaam</label>
+                      <input
+                        type="text"
+                        value={editingLead.city || ''}
+                        onChange={(e) => setEditingLead({ ...editingLead, city: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                        placeholder="Stad of plaats"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Budget</label>
+                    <input
+                      type="text"
+                      value={editingLead.budget || ''}
+                      onChange={(e) => setEditingLead({ ...editingLead, budget: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                    />
+                  </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                     <select
                       value={editingLead.status}
-                      onChange={(e) => {
-                        const newStatus = e.target.value as Lead['status'];
-                        // Update in CRM
-                        if (customerData) {
-                          const success = crmSystem.updateCustomerLead(customerData.id, editingLead.id, { status: newStatus });
-                          if (success) {
-                            // Update local state
-                            setLeads(prev => prev.map(lead => 
-                              lead.id === editingLead.id ? { ...lead, status: newStatus } : lead
-                            ));
-                            setEditingLead({ ...editingLead, status: newStatus });
-                            alert('✅ Status bijgewerkt!');
-                          }
-                        }
-                      }}
+                      onChange={(e) => setEditingLead({ ...editingLead, status: e.target.value as Lead['status'] })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                     >
                       {customStages.map(stage => (
@@ -2132,15 +2667,78 @@ export default function CustomerLeadsPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="flex justify-end">
+                  
+                  {/* Deal Value en Profit - alleen tonen als status deal_closed */}
+                  {editingLead.status === 'deal_closed' && (
+                    <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-xl border-2 border-green-200">
+                      <div className="flex items-center mb-3">
+                        <span className="text-2xl mr-2">💰</span>
+                        <h4 className="text-lg font-semibold text-gray-900">Deal Financiën</h4>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Omzet (€)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editingLead.dealValue || ''}
+                            onChange={(e) => setEditingLead({ 
+                              ...editingLead, 
+                              dealValue: e.target.value ? parseFloat(e.target.value) : undefined 
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            placeholder="Bijv. 8500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Totale omzet van de deal</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Winst (€)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editingLead.profit || ''}
+                            onChange={(e) => setEditingLead({ 
+                              ...editingLead, 
+                              profit: e.target.value ? parseFloat(e.target.value) : undefined 
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            placeholder="Bijv. 2500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Netto winst op de deal</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+ 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Resultaat gesprek</label>
+                    <textarea
+                      value={editingLead.notes || ''}
+                      onChange={(e) => setEditingLead({ ...editingLead, notes: e.target.value })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      placeholder="Noteer het resultaat van het gesprek met de klant..."
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3 pt-4">
                     <button
+                      type="button"
                       onClick={() => setEditingLead(null)}
-                      className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                      className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
                     >
-                      Sluiten
+                      Annuleren
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-gradient-to-r from-brand-purple to-brand-pink text-white rounded-xl hover:opacity-90 font-semibold transition-opacity"
+                    >
+                      Opslaan & Synchroniseren
                     </button>
                   </div>
-                </div>
+                </form>
               </div>
             </motion.div>
           </motion.div>
@@ -2184,18 +2782,28 @@ export default function CustomerLeadsPage() {
                     name: formData.get('name') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
-                    company: formData.get('company') as string,
-                    address: formData.get('address') as string,
+                    company: '',
+                    address: '',
                     city: formData.get('city') as string,
-                    interest: formData.get('interest') as string,
+                    interest: formData.get('redenThuisbatterij') as string || 'Thuisbatterij',
                     budget: formData.get('budget') as string,
-                    timeline: formData.get('timeline') as string,
+                    timeline: '',
                     notes: formData.get('notes') as string,
                     status: 'new',
                     assignedTo: user?.name || 'Onbekend',
                     source: 'manual',
                     sheetRowNumber: undefined,
-                    branchData: undefined
+                    branchData: {
+                      datumInteresse: new Date().toLocaleDateString('nl-NL'),
+                      postcode: formData.get('postcode') as string || '',
+                      huisnummer: formData.get('huisnummer') as string || '',
+                      zonnepanelen: formData.get('zonnepanelen') as string || '',
+                      dynamischContract: formData.get('dynamischContract') as string || '',
+                      stroomverbruik: formData.get('stroomverbruik') as string || '',
+                      nieuwsbrief: '-',
+                      redenThuisbatterij: formData.get('redenThuisbatterij') as string || '',
+                      koopintentie: formData.get('koopintentie') as string || ''
+                    }
                   };
 
                   if (customerData) {
@@ -2243,19 +2851,16 @@ export default function CustomerLeadsPage() {
                               // Don't show error to user, WhatsApp is optional
                             }
                             
-                            alert('✅ Nieuwe lead succesvol toegevoegd in portal EN Google Sheets!');
+                            console.log('✅ Nieuwe lead succesvol toegevoegd in portal EN Google Sheets!');
                           }
                         } catch (error) {
                           console.error('Error adding lead to Google Sheets:', error);
-                          alert(`✅ Lead succesvol toegevoegd in portal!\n\n⚠️ Google Sheets sync: ${error instanceof Error ? error.message : 'Fout bij sync'}`);
                         }
-                      } else {
-                        alert('✅ Nieuwe lead succesvol toegevoegd!');
                       }
                       
                       setShowAddForm(false);
                     } else {
-                      alert('❌ Fout bij toevoegen van lead');
+                      console.error('❌ Fout bij toevoegen van lead');
                     }
                   }
                 }} className="space-y-4">
@@ -2271,10 +2876,11 @@ export default function CustomerLeadsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">E-mail *</label>
                       <input
                         type="email"
                         name="email"
+                        required
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                         placeholder="email@voorbeeld.nl"
                       />
@@ -2292,45 +2898,70 @@ export default function CustomerLeadsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Bedrijf</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Postcode</label>
                       <input
                         type="text"
-                        name="company"
+                        name="postcode"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
-                        placeholder="Bedrijfsnaam"
+                        placeholder="1234AB"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Adres</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Huisnummer</label>
                       <input
                         type="text"
-                        name="address"
+                        name="huisnummer"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
-                        placeholder="Straat en huisnummer"
+                        placeholder="12"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Plaats</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Plaatsnaam</label>
                       <input
                         type="text"
                         name="city"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
-                        placeholder="Stad"
+                        placeholder="Amsterdam"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Interesse</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Zonnepanelen</label>
+                      <select
+                        name="zonnepanelen"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      >
+                        <option value="">Selecteer</option>
+                        <option value="Ja">Ja</option>
+                        <option value="Nee">Nee</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Dynamisch contract</label>
+                      <select
+                        name="dynamischContract"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                      >
+                        <option value="">Selecteer</option>
+                        <option value="Ja">Ja</option>
+                        <option value="Nee">Nee</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Stroomverbruik (kWh/jaar)</label>
                       <input
                         type="text"
-                        name="interest"
+                        name="stroomverbruik"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
-                        placeholder="Wat is de interesse?"
+                        placeholder="3500"
                       />
                     </div>
                     <div>
@@ -2340,37 +2971,48 @@ export default function CustomerLeadsPage() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                       >
                         <option value="">Selecteer budget</option>
-                        <option value="onder €1000">Onder €1.000</option>
-                        <option value="€1000 - €2500">€1.000 - €2.500</option>
-                        <option value="€2500 - €5000">€2.500 - €5.000</option>
-                        <option value="€5000 - €10000">€5.000 - €10.000</option>
-                        <option value="boven €10000">Boven €10.000</option>
+                        <option value="onder de €2500,-">Onder de €2500,-</option>
+                        <option value="tussen de €2500,- en €5000,-">Tussen de €2500,- en €5000,-</option>
+                        <option value="tussen de €5000,- en 7500,-">Tussen de €5000,- en €7500,-</option>
+                        <option value="Meer dan €7500,-">Meer dan €7500,-</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Timeline</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Reden Thuisbatterij</label>
                     <select
-                      name="timeline"
+                      name="redenThuisbatterij"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
                     >
-                      <option value="">Selecteer timeline</option>
-                      <option value="binnen 1 maand">Binnen 1 maand</option>
-                      <option value="binnen 3 maanden">Binnen 3 maanden</option>
-                      <option value="binnen 6 maanden">Binnen 6 maanden</option>
-                      <option value="binnen 1 jaar">Binnen 1 jaar</option>
-                      <option value="langer dan 1 jaar">Langer dan 1 jaar</option>
+                      <option value="">Selecteer reden</option>
+                      <option value="Kostenbesparing">Kostenbesparing</option>
+                      <option value="Onafhankelijkheid van het stroomnet">Onafhankelijkheid van het stroomnet</option>
+                      <option value="Handelen op de dynamische markt">Handelen op de dynamische markt</option>
+                      <option value="Overig">Overig</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Notities</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Koopintentie?</label>
+                    <select
+                      name="koopintentie"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
+                    >
+                      <option value="">Selecteer</option>
+                      <option value="Ja">Ja</option>
+                      <option value="Nee">Nee</option>
+                      <option value="Misschien">Misschien</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Resultaat gesprek</label>
                     <textarea
                       name="notes"
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-purple focus:border-brand-purple"
-                      placeholder="Extra informatie over deze lead..."
+                      placeholder="Noteer het resultaat van het gesprek met de klant..."
                     />
                   </div>
 
@@ -2512,6 +3154,109 @@ export default function CustomerLeadsPage() {
                     </div>
                   </div>
 
+                  {/* Debug Console Section */}
+                  {debugLogs.length > 0 && (
+                    <div className="border-b border-gray-200 pb-4">
+                      <div 
+                        onClick={() => setShowDebugPanel(!showDebugPanel)}
+                        className="cursor-pointer"
+                      >
+                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center space-x-2">
+                          <span className="text-xl">🐛</span>
+                          <span>Debug console</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            debugLogs.some(l => l.level === 'error') ? 'bg-red-100 text-red-700' :
+                            debugLogs.some(l => l.level === 'warning') ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {debugLogs.length} logs
+                          </span>
+                          <motion.svg 
+                            animate={{ rotate: showDebugPanel ? 180 : 0 }}
+                            className="w-4 h-4 text-gray-400"
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </motion.svg>
+                        </h4>
+                        <p className="text-sm text-gray-600 mb-3">
+                          Technische logs voor troubleshooting bij problemen met het laden van leads
+                        </p>
+                      </div>
+
+                      <AnimatePresence>
+                        {showDebugPanel && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="space-y-2"
+                          >
+                            <div className="flex gap-2 mb-3">
+                              <button
+                                onClick={() => {
+                                  const logText = debugLogs.map(log => 
+                                    `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}\n${log.data ? JSON.stringify(log.data, null, 2) : ''}`
+                                  ).join('\n\n');
+                                  navigator.clipboard.writeText(logText);
+                                  alert('Logs gekopieerd!');
+                                }}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+                              >
+                                📋 Kopieer logs
+                              </button>
+                              <button
+                                onClick={() => setDebugLogs([])}
+                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
+                              >
+                                🗑️ Wis logs
+                              </button>
+                              <button
+                                onClick={() => loadCustomerData()}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors"
+                              >
+                                🔄 Herlaad
+                              </button>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3 max-h-64 overflow-y-auto space-y-1.5 border border-gray-200">
+                              {debugLogs.map((log, index) => (
+                                <div 
+                                  key={index} 
+                                  className={`p-2 rounded text-xs ${
+                                    log.level === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+                                    log.level === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+                                    log.level === 'warning' ? 'bg-yellow-50 border border-yellow-200 text-yellow-800' :
+                                    'bg-blue-50 border border-blue-200 text-blue-800'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <span className="text-sm flex-shrink-0">
+                                      {log.level === 'success' ? '✅' : log.level === 'error' ? '❌' : log.level === 'warning' ? '⚠️' : 'ℹ️'}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-mono text-[10px] text-gray-500 mb-0.5">{log.timestamp}</div>
+                                      <div className="font-medium">{log.message}</div>
+                                      {log.data && (
+                                        <details className="mt-1">
+                                          <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-gray-800">Bekijk data</summary>
+                                          <pre className="text-[10px] mt-1 p-2 bg-black/5 rounded overflow-x-auto">
+                                            {JSON.stringify(log.data, null, 2)}
+                                          </pre>
+                                        </details>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
                   {/* Save Button */}
                   <div className="flex justify-end space-x-3">
                     <button
@@ -2534,6 +3279,94 @@ export default function CustomerLeadsPage() {
                   </div>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Deal Value Modal - Omzet en Winst */}
+      <AnimatePresence>
+        {showDealValueModal.show && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setShowDealValueModal({ show: false, leadId: '', newStatus: 'new' })}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full"
+            >
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">🎉 Deal gesloten!</h3>
+              <p className="text-gray-600 mb-6">
+                Vul optioneel de omzet en winst in voor deze deal
+              </p>
+
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const dealValue = formData.get('dealValue') ? parseFloat(formData.get('dealValue') as string) : undefined;
+                const profit = formData.get('profit') ? parseFloat(formData.get('profit') as string) : undefined;
+                
+                handleCloseDeal(showDealValueModal.leadId, showDealValueModal.newStatus, dealValue, profit);
+                setShowDealValueModal({ show: false, leadId: '', newStatus: 'new' });
+              }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      💰 Omzet (€)
+                    </label>
+                    <input
+                      type="number"
+                      name="dealValue"
+                      step="0.01"
+                      min="0"
+                      placeholder="Bijv. 8500"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">De totale omzet van deze deal</p>
+        </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      📈 Winst (€)
+                    </label>
+                    <input
+                      type="number"
+                      name="profit"
+                      step="0.01"
+                      min="0"
+                      placeholder="Bijv. 2500"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">De netto winst op deze deal</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowDealValueModal({ show: false, leadId: '', newStatus: 'new' })}
+                    className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-medium transition-all shadow-lg hover:shadow-xl"
+                  >
+                    Deal sluiten
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-500 text-center mt-3">
+                  Je kunt deze velden leeg laten en later invullen via bewerken
+                </p>
+              </form>
             </motion.div>
           </motion.div>
         )}

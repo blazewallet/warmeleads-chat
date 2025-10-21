@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { StructuredData } from "@/components/StructuredData";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { FloatingWhatsAppButton } from "@/components/FloatingWhatsAppButton";
 import { logEnvironmentStatus } from "@/lib/environmentCheck";
 import "./globals.css";
 
@@ -22,9 +23,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Leads Kopen Nederland | Thuisbatterijen, Zonnepanelen, Warmtepompen | WarmeLeads",
-  description: "Koop verse leads voor thuisbatterijen, zonnepanelen, warmtepompen, airco's en financial lease. Exclusieve en gedeelde leads uit onze campagnes. Nederlandse prospects, realtime delivery, 15 minuten garantie.",
-  keywords: "leads kopen, leads thuisbatterijen, zonnepanelen leads, warmtepomp leads, airco leads, financial lease leads, exclusieve leads, gedeelde leads, leadgeneratie Nederland, verse leads, prospects kopen",
+  title: "Meer Klanten Nodig? | Verse Leads voor Duurzame Energie | WarmeLeads",
+  description: "Meer klanten nodig voor uw installatiebedrijf? Krijg verse, kwaliteitsvolle leads voor thuisbatterijen, zonnepanelen, warmtepompen en airco's. Exclusieve klanten binnen 15 minuten. Geen abonnement, betaal per lead.",
+  keywords: "meer klanten nodig, klanten werven, nieuwe klanten krijgen, klantacquisitie, klantenwerving, leads kopen, installateur leads, duurzame energie leads, thuisbatterijen leads, zonnepanelen leads, warmtepomp leads, exclusieve klanten, klanten vinden, meer opdrachten, lead generatie Nederland",
   authors: [{ name: "WarmeLeads" }],
   creator: "WarmeLeads",
   publisher: "WarmeLeads",
@@ -48,26 +49,28 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico"
   },
   openGraph: {
-    title: "Leads Kopen Nederland | Verse Leads Thuisbatterijen, Zonnepanelen, Warmtepompen",
-    description: "Koop exclusieve en gedeelde leads voor thuisbatterijen, zonnepanelen, warmtepompen, airco's en financial lease. Nederlandse prospects uit onze campagnes, realtime delivery in 15 minuten.",
+    title: "Meer Klanten Nodig? | Verse Leads voor Installateurs | WarmeLeads",
+    description: "Krijg direct nieuwe klanten voor thuisbatterijen, zonnepanelen, warmtepompen en airco's. Exclusieve leads binnen 15 minuten. Geen abonnement, betaal per klant. Perfect voor installateurs en duurzame energie bedrijven.",
     url: "https://www.warmeleads.eu",
     siteName: "WarmeLeads - Leadgeneratie Nederland",
     locale: "nl_NL",
     type: "website",
     images: [
       {
-        url: "/og-image.jpg",
+        url: "https://www.warmeleads.eu/logo-1200x1200.png",
         width: 1200,
-        height: 630,
-        alt: "WarmeLeads - Leadgeneratie Expert",
+        height: 1200,
+        alt: "WarmeLeads Logo",
+        type: "image/png",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "WarmeLeads - Verse Leads Binnen 15 Minuten",
-    description: "Krijg exclusieve of gedeelde leads voor thuisbatterijen, zonnepanelen, warmtepompen, airco's en financial lease.",
-    images: ["/og-image.jpg"],
+    title: "Meer Klanten Nodig? Verse Leads Binnen 15 Minuten",
+    description: "Nieuwe klanten voor installateurs: thuisbatterijen, zonnepanelen, warmtepompen, airco's. Exclusieve leads, geen abonnement, betaal per klant.",
+    images: ["https://www.warmeleads.eu/logo-1200x1200.png"],
+    creator: "@WarmeLeads",
   },
   robots: {
     index: true,
@@ -82,7 +85,14 @@ export const metadata: Metadata = {
   },
   verification: {
     google: "google03b6b9ca45bfab2e",
+    yandex: "yandex-verification-code",
+    other: {
+      "facebook-domain-verification": "facebook-domain-verification-code",
+    },
   },
+  category: "Lead Generation",
+  classification: "Business Services",
+  referrer: "origin-when-cross-origin",
 };
 
 export default function RootLayout({
@@ -113,6 +123,7 @@ export default function RootLayout({
             {children}
           </div>
         </ErrorBoundary>
+        <FloatingWhatsAppButton />
       </body>
     </html>
   );

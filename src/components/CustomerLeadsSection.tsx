@@ -58,7 +58,7 @@ function LeadRow({ lead, onUpdateLead }: LeadRowProps) {
             <option value="proposal">Voorstel</option>
             <option value="negotiation">Onderhandeling</option>
             <option value="converted">Geconverteerd</option>
-            <option value="geclosed">Geclosed</option>
+            <option value="deal_closed">Deal gesloten</option>
             <option value="lost">Verloren</option>
           </select>
         ) : (
@@ -126,16 +126,18 @@ export function CustomerLeadsSection({
 }: CustomerLeadsSectionProps) {
   const leads = customer.leadData || [];
   
-  // Calculate lead statistics
+  // Calculate lead statistics - include both converted and deal_closed
   const stats = {
     total: leads.length,
     new: leads.filter(l => l.status === 'new').length,
     contacted: leads.filter(l => l.status === 'contacted').length,
     qualified: leads.filter(l => l.status === 'qualified').length,
-    converted: leads.filter(l => l.status === 'converted').length,
-    geclosed: leads.filter(l => l.status === 'geclosed').length,
+    // Converted includes both 'converted' and 'deal_closed' statuses
+    converted: leads.filter(l => l.status === 'converted' || l.status === 'deal_closed').length,
+    deal_closed: leads.filter(l => l.status === 'deal_closed').length,
     lost: leads.filter(l => l.status === 'lost').length,
-    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'geclosed').length / leads.length * 100) : 0
+    // Conversion rate based on both converted and deal_closed
+    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted' || l.status === 'deal_closed').length / leads.length * 100) : 0
   };
 
   return (
@@ -199,8 +201,8 @@ export function CustomerLeadsSection({
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Geclosede Deals</p>
-              <p className="text-2xl font-bold text-green-600">{stats.geclosed}</p>
+              <p className="text-sm font-medium text-gray-600">Gesloten deals</p>
+              <p className="text-2xl font-bold text-green-600">{stats.deal_closed}</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
               <span className="text-xl">💰</span>

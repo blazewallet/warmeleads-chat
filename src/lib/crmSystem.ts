@@ -83,8 +83,9 @@ export interface Lead {
   budget?: string;
   timeline?: string;
   notes?: string;
-  status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'converted' | 'geclosed' | 'lost';
-  dealValue?: number; // Waarde van de deal in euro's
+  status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'converted' | 'deal_closed' | 'lost';
+  dealValue?: number; // Omzet van de deal in euro's
+  profit?: number; // Winst van de deal in euro's
   assignedTo?: string;
   createdAt: Date;
   updatedAt: Date;

@@ -273,3 +273,7 @@ contact_details → payment_ready → payment_redirect
 **De website is nu volledig geoptimaliseerd en geperfectioneerd!** 🎉
 
 
+
+
+
+

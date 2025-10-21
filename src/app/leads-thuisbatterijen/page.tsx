@@ -129,6 +129,49 @@ export default function ThuisbatterijLeadsPage() {
               🚀 Start Direct met Leads
             </a>
           </div>
+
+          {/* Footer Links */}
+          <div className="mt-16 text-center border-t border-white/20 pt-8">
+            <p className="text-white/60 text-sm mb-4">
+              🔒 Uw gegevens zijn veilig • 💰 Geen verborgen kosten • ⚡ Direct resultaat
+            </p>
+            <div className="space-x-4">
+              <a 
+                href="/leadgeneratie-gids" 
+                className="text-white/50 hover:text-white/80 text-xs underline transition-colors"
+              >
+                📖 Leadgeneratie gids
+              </a>
+              <span className="text-white/30">•</span>
+              <a 
+                href="/blog" 
+                className="text-white/50 hover:text-white/80 text-xs underline transition-colors"
+              >
+                📝 Blog & Tips
+              </a>
+              <span className="text-white/30">•</span>
+              <a 
+                href="/algemene-voorwaarden" 
+                className="text-white/50 hover:text-white/80 text-xs underline transition-colors"
+              >
+                📋 Algemene voorwaarden
+              </a>
+              <span className="text-white/30">•</span>
+              <a 
+                href="/privacyverklaring" 
+                className="text-white/50 hover:text-white/80 text-xs underline transition-colors"
+              >
+                🔒 Privacyverklaring
+              </a>
+            </div>
+            
+            {/* Bedrijfsgegevens */}
+            <div className="mt-6 pt-6 border-t border-white/20">
+              <p className="text-white/50 text-xs">
+                Warmeleads.eu • KvK: 88929280 • Stavangerweg 21-1, 9723 JC Groningen
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

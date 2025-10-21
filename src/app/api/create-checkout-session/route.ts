@@ -1,19 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { leadPackages, calculatePackagePrice } from '@/lib/stripe';
 
 export async function POST(req: NextRequest) {
   try {
     console.log('🔵 Creating Stripe Checkout Session...');
     
     const body = await req.json();
-    const { amount, currency = 'eur', customerInfo, orderDetails, paymentMethod } = body;
+    const { 
+      packageId, 
+      quantity, 
+      customerEmail,
+      customerName,
+      customerCompany,
+      paymentMethod = 'card'
+    } = body;
 
-    // Basic validation
-    if (!amount || amount <= 0 || !customerInfo?.email) {
+    // Find the package
+    const allPackages = Object.values(leadPackages).flat();
+    const selectedPackage = allPackages.find(pkg => pkg.id === packageId);
+    
+    if (!selectedPackage) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Package not found' },
         { status: 400 }
       );
     }
+
+    // Basic validation
+    if (!customerEmail) {
+      return NextResponse.json(
+        { error: 'Customer email is required' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate quantity for exclusive leads
+    if (selectedPackage.type === 'exclusive') {
+      const minQty = selectedPackage.minQuantity || 30;
+      if (!quantity || quantity < minQty) {
+        return NextResponse.json(
+          { error: `Minimum ${minQty} leads required for exclusive packages` },
+          { status: 400 }
+        );
+      }
+    }
+    
+    // Calculate price with tiered pricing (EXCL VAT)
+    const pricing = calculatePackagePrice(selectedPackage, quantity);
+    const totalAmountExclVAT = pricing.totalPrice;
+    
+    // Calculate VAT (21%)
+    const { calculateVAT } = await import('@/lib/vatCalculator');
+    const vatBreakdown = calculateVAT(totalAmountExclVAT);
+    const totalAmountInclVAT = vatBreakdown.amountInclVAT;
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeSecretKey) {
@@ -24,31 +63,54 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('🔵 Creating checkout session for:', {
-      amount,
-      currency,
-      paymentMethod,
-      customerEmail: customerInfo.email
+      packageId,
+      packageName: selectedPackage.name,
+      amountExclVAT: totalAmountExclVAT,
+      vatAmount: vatBreakdown.vatAmount,
+      amountInclVAT: totalAmountInclVAT,
+      pricePerLead: pricing.pricePerLead,
+      quantity,
+      tierInfo: pricing.tierInfo,
+      customerEmail
     });
 
-    // Create Stripe Checkout Session with iDEAL
-    const checkoutData = {
-      'payment_method_types[]': paymentMethod === 'ideal' ? 'ideal' : 'card',
+    // Create product description with quantity and pricing info
+    const productDescription = selectedPackage.type === 'exclusive'
+      ? `${quantity} exclusieve leads voor ${selectedPackage.industry} - ${pricing.tierInfo}`
+      : `${quantity} gedeelde leads voor ${selectedPackage.industry}`;
+
+    // Create Stripe Checkout Session with multiple payment methods
+    const checkoutData: Record<string, string> = {
+      // Enable multiple payment methods for European customers
+      'payment_method_types[0]': 'card',           // Credit/Debit cards
+      'payment_method_types[1]': 'ideal',          // iDEAL (Netherlands)
+      'payment_method_types[2]': 'bancontact',     // Bancontact (Belgium)
+      // Note: PayPal and Klarna require activation in Stripe Dashboard
+      // To enable: https://dashboard.stripe.com/account/payments/settings
       'mode': 'payment',
-      'success_url': `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.warmeleads.eu'}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      'cancel_url': `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.warmeleads.eu'}/payment-cancelled`,
-      'customer_email': customerInfo.email,
-      'line_items[0][price_data][currency]': currency,
-      'line_items[0][price_data][product_data][name]': `${orderDetails?.leadType || 'Leads'} - ${orderDetails?.industry || 'Algemeen'}`,
-      'line_items[0][price_data][product_data][description]': `${orderDetails?.quantity || 'Leads'} voor ${orderDetails?.industry || 'uw bedrijf'}`,
-      'line_items[0][price_data][unit_amount]': amount.toString(),
+      'locale': 'nl',                               // Dutch locale to ensure NL payment methods show
+      'billing_address_collection': 'required',     // Collect billing address to detect country
+      'success_url': `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.warmeleads.eu'}/portal?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      'cancel_url': `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.warmeleads.eu'}/portal?payment=cancelled`,
+      'customer_email': customerEmail,
+      'line_items[0][price_data][currency]': selectedPackage.currency.toUpperCase(), // Ensure uppercase for payment methods compatibility
+      'line_items[0][price_data][product_data][name]': `${selectedPackage.name} - ${quantity} leads`,
+      'line_items[0][price_data][product_data][description]': productDescription,
+      'line_items[0][price_data][unit_amount]': totalAmountInclVAT.toString(), // INCL VAT - what customer pays
       'line_items[0][quantity]': '1',
-      'metadata[source]': 'warmeleads_checkout',
-      'metadata[industry]': orderDetails?.industry || 'unknown',
-      'metadata[leadType]': orderDetails?.leadType || 'unknown',
-      'metadata[customerName]': customerInfo.name,
-      'metadata[customerEmail]': customerInfo.email,
-      'metadata[customerPhone]': customerInfo.phone || '',
-      'metadata[customerCompany]': customerInfo.company || '',
+      'metadata[source]': 'warmeleads_portal',
+      'metadata[packageId]': packageId,
+      'metadata[industry]': selectedPackage.industry,
+      'metadata[leadType]': selectedPackage.type,
+      'metadata[leadQuantity]': quantity.toString(),
+      'metadata[pricePerLead]': pricing.pricePerLead.toString(), // EXCL VAT per lead
+      'metadata[totalAmountExclVAT]': totalAmountExclVAT.toString(),
+      'metadata[vatAmount]': vatBreakdown.vatAmount.toString(),
+      'metadata[vatPercentage]': '21',
+      'metadata[customerName]': customerName || '',
+      'metadata[customerEmail]': customerEmail,
+      'metadata[customerCompany]': customerCompany || '',
+      'metadata[orderQuantity]': quantity.toString(),
     };
 
     const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
@@ -86,5 +148,7 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+
 
 

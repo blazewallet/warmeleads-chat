@@ -1,4 +1,4 @@
-import { LEAD_PRICING } from './pricing';
+import { LEAD_PRICING, leadPricing } from './pricing';
 
 interface UserProfile {
   industry?: string;
@@ -39,7 +39,7 @@ interface LeadPricing {
 }
 
 // Use the centralized pricing from pricing.ts
-export const leadPricing = LEAD_PRICING;
+// leadPricing is now imported from pricing.ts
 
 export const chatFlow: Record<string, ChatStep> = {
   // Basis flow - altijd naar leads bestellen
@@ -125,9 +125,9 @@ export const chatFlow: Record<string, ChatStep> = {
       if (profile.leadType === 'Exclusieve leads') {
         return `Perfect! Voor exclusieve ${profile.industry?.toLowerCase()} leads hebben wij:
 
-💎 30+ leads: €${pricing.exclusive['30+']} per lead
-💎 50+ leads: €${pricing.exclusive['50+']} per lead  
-💎 75+ leads: €${pricing.exclusive['75+']} per lead
+💎 30+ leads: €42,50 per lead
+💎 50+ leads: €40,00 per lead  
+💎 75+ leads: €37,50 per lead
 
 ✅ Verse leads binnen 15 minuten
 ✅ 100% exclusief voor u
@@ -135,9 +135,9 @@ export const chatFlow: Record<string, ChatStep> = {
       } else {
         return `Uitstekende keuze! Voor gedeelde ${profile.industry?.toLowerCase()} leads:
 
-🤝 Prijs: €${pricing.shared.price} per lead
-🤝 Minimum: ${pricing.shared.minQuantity} leads per bestelling
-🤝 Gedeeld met: Maximaal 2 andere bedrijven
+🤝 Prijs: €12,50 per lead
+🤝 Minimum: 500 leads per bestelling
+🤝 Gedeeld met: Maximaal 5 andere bedrijven
 
 ✅ Verse leads binnen 15 minuten
 ✅ Uitstekende prijs-kwaliteit verhouding`;
@@ -445,13 +445,13 @@ Voor welke branche wilt u een specifieke prijsopgave?`,
       return `Voor ${industry} hebben we deze tarieven:
 
 💎 Exclusieve leads:
-✅ 30+ leads: €${pricing.exclusive['30+']} per lead
-✅ 50+ leads: €${pricing.exclusive['50+']} per lead  
-✅ 75+ leads: €${pricing.exclusive['75+']} per lead
+✅ 30+ leads: €42,50 per lead
+✅ 50+ leads: €40,00 per lead  
+✅ 75+ leads: €37,50 per lead
 
 🤝 Gedeelde leads:
-✅ €${pricing.shared.price} per lead
-✅ Minimum ${pricing.shared.minQuantity} leads per bestelling
+✅ €12,50 per lead
+✅ Minimum 500 leads per bestelling
 
 Welke optie spreekt u aan?`;
     },
@@ -593,8 +593,8 @@ Wilt u een offerte voor maatwerk?`;
       
       return `Voor ${industry.toLowerCase()} hebben we uitgebreide ervaring:
 
-💎 Exclusieve leads: €${pricing.exclusive['30+']} - €${pricing.exclusive['75+']} per lead
-🤝 Gedeelde leads: €${pricing.shared.price} per lead (min. ${pricing.shared.minQuantity})
+💎 Exclusieve leads: €42,50 - €37,50 per lead (bulkkorting beschikbaar)
+🤝 Gedeelde leads: €12,50 per lead (min. 500)
 
 🎯 Specialisaties:
 ✅ Gerichte interesse filtering
@@ -1282,8 +1282,8 @@ export function generatePersonalizedRecommendation(profile: UserProfile): string
   const currentLeads = profile.currentLeads;
 
   if (challenge === 'Leads zijn te duur' || currentLeads === 'Nog geen leads') {
-    const price = industry ? leadPricing[industry]?.shared.price || 15 : 15;
-    return `Op basis van uw situatie raad ik gedeelde leads aan. Deze zijn betaalbaar (€${price}/lead) en perfect om mee te starten!`;
+    const price = industry ? leadPricing[industry]?.shared || 12.50 : 12.50;
+    return `Op basis van uw situatie raad ik gedeelde leads aan. Deze zijn betaalbaar (€${price.toFixed(2).replace('.', ',')}/lead) en perfect om mee te starten!`;
   }
 
   if (currentLeads === '100+ leads' || challenge === 'Te weinig volume') {
@@ -1292,5 +1292,7 @@ export function generatePersonalizedRecommendation(profile: UserProfile): string
 
   return `Ik raad een mix van beide aan: start met gedeelde leads om te testen, schakel over naar exclusieve leads voor uw beste campagnes!`;
 }
+
+
 
 

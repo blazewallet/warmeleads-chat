@@ -23,42 +23,101 @@ export const stripe = new Stripe(stripeSecretKey, {
   maxNetworkRetries: 3,
 });
 
+export interface PricingTier {
+  minQuantity: number;
+  maxQuantity?: number;
+  pricePerLead: number; // in cents
+}
+
 export interface LeadPackage {
   id: string;
   name: string;
   description: string;
-  price: number;
+  basePrice: number; // Deprecated - use pricing tiers instead
+  price: number; // Deprecated
   currency: string;
   industry: string;
   type: 'exclusive' | 'shared';
   quantity: number;
+  minQuantity?: number; // For exclusive leads
+  pricingTiers?: PricingTier[]; // For tiered pricing
   features: string[];
 }
 
 export const leadPackages: Record<string, LeadPackage[]> = {
+  'Test': [
+    {
+      id: 'test_exclusive',
+      name: '🧪 Test Exclusieve Leads',
+      description: 'Test exclusieve leads - €0,01 per lead voor het testen van de betaalflow',
+      basePrice: 1, // €0.01
+      price: 1,
+      currency: 'eur',
+      industry: 'Test',
+      type: 'exclusive',
+      quantity: 1,
+      minQuantity: 1, // Minimum 1 lead voor testen
+      pricingTiers: [
+        { minQuantity: 1, pricePerLead: 1 }, // €0.01 per lead
+      ],
+      features: [
+        '🧪 TEST MODUS - Alleen voor testen',
+        '€0,01 per lead',
+        'Minimum 1 lead',
+        'Ideaal voor het testen van betaalflow',
+        'iDEAL, Bancontact en Card betaling'
+      ]
+    },
+    {
+      id: 'test_shared',
+      name: '🧪 Test Gedeelde Leads',
+      description: 'Test gedeelde leads - €0,01 per lead voor het testen van de betaalflow',
+      basePrice: 1, // €0.01
+      price: 1,
+      currency: 'eur',
+      industry: 'Test',
+      type: 'shared',
+      quantity: 10, // Vaste batch van 10 leads
+      features: [
+        '🧪 TEST MODUS - Alleen voor testen',
+        '€0,01 per lead',
+        'Vaste batch van 10 leads',
+        'Totaal: €0,10',
+        'Ideaal voor het testen van betaalflow'
+      ]
+    }
+  ],
   'Thuisbatterijen': [
     {
-      id: 'thuisbatterij_exclusive_30',
-      name: 'Exclusieve Thuisbatterij Leads - 30+',
-      description: '30+ exclusieve thuisbatterij leads per maand',
-      price: 4250, // €42.50 in cents
+      id: 'thuisbatterij_exclusive',
+      name: 'Exclusieve Thuisbatterij Leads',
+      description: 'Exclusieve thuisbatterij leads met staffelkorting',
+      basePrice: 4250,
+      price: 4250, // Base price per lead
       currency: 'eur',
       industry: 'Thuisbatterijen',
       type: 'exclusive',
       quantity: 30,
+      minQuantity: 30,
+      pricingTiers: [
+        { minQuantity: 30, maxQuantity: 49, pricePerLead: 4250 }, // €42.50
+        { minQuantity: 50, maxQuantity: 74, pricePerLead: 4000 }, // €40.00
+        { minQuantity: 75, pricePerLead: 3750 }, // €37.50
+      ],
       features: [
         '100% exclusieve leads',
         'Verse leads binnen 15 minuten',
-        'Hoge conversiekans',
+        'Staffelkorting vanaf 50 leads',
         'Nederlandse prospects',
         '24/7 support'
       ]
     },
     {
-      id: 'thuisbatterij_shared_500',
-      name: 'Gedeelde Thuisbatterij Leads - 500 stuks',
-      description: '500 gedeelde thuisbatterij leads (gedeeld met 2 anderen)',
-      price: 1250, // €12.50 in cents
+      id: 'thuisbatterij_shared',
+      name: 'Gedeelde Thuisbatterij Leads',
+      description: '500 gedeelde thuisbatterij leads (gedeeld met max 2 anderen)',
+      basePrice: 1250,
+      price: 1250, // €12.50 per lead
       currency: 'eur',
       industry: 'Thuisbatterijen',
       type: 'shared',
@@ -66,7 +125,7 @@ export const leadPackages: Record<string, LeadPackage[]> = {
       features: [
         'Gedeeld met max 2 anderen',
         'Verse leads binnen 15 minuten',
-        'Uitstekende prijs-kwaliteit',
+        'Vaste batch van 500 leads',
         'Nederlandse prospects',
         'Email support'
       ]
@@ -74,20 +133,177 @@ export const leadPackages: Record<string, LeadPackage[]> = {
   ],
   'Zonnepanelen': [
     {
-      id: 'zonnepanelen_exclusive_30',
-      name: 'Exclusieve Zonnepanelen Leads - 30+',
-      description: '30+ exclusieve zonnepanelen leads per maand',
-      price: 4500, // €45.00 in cents
+      id: 'zonnepanelen_exclusive',
+      name: 'Exclusieve Zonnepanelen Leads',
+      description: 'Exclusieve zonnepanelen leads met staffelkorting',
+      basePrice: 4250,
+      price: 4250,
       currency: 'eur',
       industry: 'Zonnepanelen',
       type: 'exclusive',
       quantity: 30,
+      minQuantity: 30,
+      pricingTiers: [
+        { minQuantity: 30, maxQuantity: 49, pricePerLead: 4250 },
+        { minQuantity: 50, maxQuantity: 74, pricePerLead: 4000 },
+        { minQuantity: 75, pricePerLead: 3750 },
+      ],
       features: [
         '100% exclusieve leads',
         'Verse leads binnen 15 minuten',
-        'Hoge conversiekans',
+        'Staffelkorting vanaf 50 leads',
         'Nederlandse prospects',
         '24/7 support'
+      ]
+    },
+    {
+      id: 'zonnepanelen_shared',
+      name: 'Gedeelde Zonnepanelen Leads',
+      description: '500 gedeelde zonnepanelen leads (gedeeld met max 2 anderen)',
+      basePrice: 1250,
+      price: 1250,
+      currency: 'eur',
+      industry: 'Zonnepanelen',
+      type: 'shared',
+      quantity: 500,
+      features: [
+        'Gedeeld met max 2 anderen',
+        'Verse leads binnen 15 minuten',
+        'Vaste batch van 500 leads',
+        'Nederlandse prospects',
+        'Email support'
+      ]
+    }
+  ],
+  'Warmtepompen': [
+    {
+      id: 'warmtepomp_exclusive',
+      name: 'Exclusieve Warmtepomp Leads',
+      description: 'Exclusieve warmtepomp leads met staffelkorting',
+      basePrice: 4250,
+      price: 4250,
+      currency: 'eur',
+      industry: 'Warmtepompen',
+      type: 'exclusive',
+      quantity: 30,
+      minQuantity: 30,
+      pricingTiers: [
+        { minQuantity: 30, maxQuantity: 49, pricePerLead: 4250 },
+        { minQuantity: 50, maxQuantity: 74, pricePerLead: 4000 },
+        { minQuantity: 75, pricePerLead: 3750 },
+      ],
+      features: [
+        '100% exclusieve leads',
+        'Verse leads binnen 15 minuten',
+        'Staffelkorting vanaf 50 leads',
+        'Nederlandse prospects',
+        '24/7 support'
+      ]
+    },
+    {
+      id: 'warmtepomp_shared',
+      name: 'Gedeelde Warmtepomp Leads',
+      description: '500 gedeelde warmtepomp leads (gedeeld met max 2 anderen)',
+      basePrice: 1250,
+      price: 1250,
+      currency: 'eur',
+      industry: 'Warmtepompen',
+      type: 'shared',
+      quantity: 500,
+      features: [
+        'Gedeeld met max 2 anderen',
+        'Verse leads binnen 15 minuten',
+        'Vaste batch van 500 leads',
+        'Nederlandse prospects',
+        'Email support'
+      ]
+    }
+  ],
+  'Airco': [
+    {
+      id: 'airco_exclusive',
+      name: 'Exclusieve Airco Leads',
+      description: 'Exclusieve airco leads met staffelkorting',
+      basePrice: 4250,
+      price: 4250,
+      currency: 'eur',
+      industry: 'Airco',
+      type: 'exclusive',
+      quantity: 30,
+      minQuantity: 30,
+      pricingTiers: [
+        { minQuantity: 30, maxQuantity: 49, pricePerLead: 4250 },
+        { minQuantity: 50, maxQuantity: 74, pricePerLead: 4000 },
+        { minQuantity: 75, pricePerLead: 3750 },
+      ],
+      features: [
+        '100% exclusieve leads',
+        'Verse leads binnen 15 minuten',
+        'Staffelkorting vanaf 50 leads',
+        'Nederlandse prospects',
+        '24/7 support'
+      ]
+    },
+    {
+      id: 'airco_shared',
+      name: 'Gedeelde Airco Leads',
+      description: '500 gedeelde airco leads (gedeeld met max 2 anderen)',
+      basePrice: 1250,
+      price: 1250,
+      currency: 'eur',
+      industry: 'Airco',
+      type: 'shared',
+      quantity: 500,
+      features: [
+        'Gedeeld met max 2 anderen',
+        'Verse leads binnen 15 minuten',
+        'Vaste batch van 500 leads',
+        'Nederlandse prospects',
+        'Email support'
+      ]
+    }
+  ],
+  'Financial Lease': [
+    {
+      id: 'lease_exclusive',
+      name: 'Exclusieve Financial Lease Leads',
+      description: 'Exclusieve financial lease leads met staffelkorting',
+      basePrice: 4250,
+      price: 4250,
+      currency: 'eur',
+      industry: 'Financial Lease',
+      type: 'exclusive',
+      quantity: 30,
+      minQuantity: 30,
+      pricingTiers: [
+        { minQuantity: 30, maxQuantity: 49, pricePerLead: 4250 },
+        { minQuantity: 50, maxQuantity: 74, pricePerLead: 4000 },
+        { minQuantity: 75, pricePerLead: 3750 },
+      ],
+      features: [
+        '100% exclusieve leads',
+        'Verse leads binnen 15 minuten',
+        'Staffelkorting vanaf 50 leads',
+        'Nederlandse zakelijke prospects',
+        '24/7 support'
+      ]
+    },
+    {
+      id: 'lease_shared',
+      name: 'Gedeelde Financial Lease Leads',
+      description: '500 gedeelde financial lease leads (gedeeld met max 2 anderen)',
+      basePrice: 1250,
+      price: 1250,
+      currency: 'eur',
+      industry: 'Financial Lease',
+      type: 'shared',
+      quantity: 500,
+      features: [
+        'Gedeeld met max 2 anderen',
+        'Verse leads binnen 15 minuten',
+        'Vaste batch van 500 leads',
+        'Nederlandse zakelijke prospects',
+        'Email support'
       ]
     }
   ]
@@ -225,4 +441,53 @@ export function formatPrice(amountInCents: number, currency: string = 'EUR'): st
     style: 'currency',
     currency,
   }).format(amountInCents / 100);
+}
+
+// Calculate price based on quantity and pricing tiers
+export function calculatePackagePrice(pkg: LeadPackage, quantity: number): { pricePerLead: number; totalPrice: number; tierInfo?: string } {
+  // For shared leads, quantity is fixed
+  if (pkg.type === 'shared') {
+    const totalPrice = pkg.price * pkg.quantity; // €12.50 * 500 = €6250
+    return {
+      pricePerLead: pkg.price,
+      totalPrice,
+      tierInfo: `Vaste batch van ${pkg.quantity} leads`
+    };
+  }
+  
+  // For exclusive leads, use pricing tiers
+  if (pkg.pricingTiers && pkg.pricingTiers.length > 0) {
+    // Find the applicable tier
+    const tier = pkg.pricingTiers.find(t => {
+      if (t.maxQuantity) {
+        return quantity >= t.minQuantity && quantity <= t.maxQuantity;
+      }
+      return quantity >= t.minQuantity;
+    });
+    
+    if (tier) {
+      const totalPrice = tier.pricePerLead * quantity;
+      let tierInfo = '';
+      
+      if (tier.maxQuantity) {
+        tierInfo = `${formatPrice(tier.pricePerLead)} per lead (${tier.minQuantity}-${tier.maxQuantity} leads)`;
+      } else {
+        tierInfo = `${formatPrice(tier.pricePerLead)} per lead (${tier.minQuantity}+ leads)`;
+      }
+      
+      return {
+        pricePerLead: tier.pricePerLead,
+        totalPrice,
+        tierInfo
+      };
+    }
+  }
+  
+  // Fallback to base price
+  const totalPrice = pkg.price * quantity;
+  return {
+    pricePerLead: pkg.price,
+    totalPrice,
+    tierInfo: `${formatPrice(pkg.price)} per lead`
+  };
 }

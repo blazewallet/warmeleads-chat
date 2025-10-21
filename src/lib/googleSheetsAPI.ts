@@ -1,6 +1,12 @@
 // Real Google Sheets API Integration
 import { type Lead } from './crmSystem';
 
+// Simple in-memory cache for Google Sheets data
+const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+
+// Cache TTL: 5 minutes for fast loading
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export interface GoogleSheetsConfig {
   spreadsheetId: string;
   range: string; // e.g., 'Leads!A1:K1000'
@@ -25,6 +31,15 @@ export class GoogleSheetsService {
 
   // Read data from Google Sheets using Service Account (primary) or API key (fallback)
   async readSheet(spreadsheetId: string, range: string = 'Sheet1!A1:K1000'): Promise<any[][]> {
+    // Check cache first
+    const cacheKey = `${spreadsheetId}:${range}`;
+    const cached = cache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      console.log('✅ Using cached Google Sheets data:', cacheKey);
+      return cached.data;
+    }
+    
     try {
       console.log('🔄 Reading Google Sheet with Service Account:', { 
         spreadsheetId: spreadsheetId.substring(0, 10) + '...', 
@@ -56,7 +71,16 @@ export class GoogleSheetsService {
               firstRow: data.values?.[0] || 'No data'
             });
 
-            return data.values || [];
+            const result = data.values || [];
+            
+            // Cache the result
+            cache.set(cacheKey, {
+              data: result,
+              timestamp: Date.now(),
+              ttl: CACHE_TTL
+            });
+            
+            return result;
           }
           
           console.warn('⚠️ Service Account read failed, trying API key fallback...');
@@ -109,7 +133,16 @@ export class GoogleSheetsService {
         firstRow: data.values?.[0] || 'No data'
       });
 
-      return data.values || [];
+      const result = data.values || [];
+      
+      // Cache the result
+      cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+        ttl: CACHE_TTL
+      });
+      
+      return result;
     } catch (error) {
       console.error('Error reading Google Sheet:', error);
       throw error;
@@ -145,15 +178,20 @@ export class GoogleSheetsService {
         const redenThuisbatterij = this.getCellValue(row, headers, ['reden thuisbatterij']);
         const koopintentie = this.getCellValue(row, headers, ['koopintentie?', 'koopintentie']);
         
-        // Build notes from available data if no specific notes column
-        const existingNotes = this.getCellValue(row, headers, ['notities', 'notes', 'opmerkingen', 'extra']);
-        let notes = existingNotes;
+        // Get "Resultaat gesprek" from column O (index 14)
+        const resultaatGesprek = this.getCellValue(row, headers, ['resultaat gesprek', 'resultaat', 'gesprek resultaat', 'notities', 'notes']);
+        const notes = resultaatGesprek || '';
         
-        // If there's a 14th column (extra data), add it to notes
-        if (row.length > 13 && row[13]) {
-          const extraData = row[13].toString().trim();
-          notes = existingNotes ? `${existingNotes} | ${extraData}` : extraData;
-        }
+        // Get Status from column P (index 15)
+        const statusValue = this.getCellValue(row, headers, ['status', 'staat']);
+        
+        // Get DealValue from column Q (index 16)
+        const dealValueStr = this.getCellValue(row, headers, ['dealvalue', 'deal value', 'omzet']);
+        const dealValue = dealValueStr ? parseFloat(dealValueStr.replace(/[^0-9.-]/g, '')) : undefined;
+        
+        // Get Profit from column R (index 17)
+        const profitStr = this.getCellValue(row, headers, ['profit', 'winst']);
+        const profit = profitStr ? parseFloat(profitStr.replace(/[^0-9.-]/g, '')) : undefined;
 
         // Basic lead data
         const lead: Lead = {
@@ -168,10 +206,18 @@ export class GoogleSheetsService {
           budget: this.getCellValue(row, headers, ['budget', 'prijs', 'investering']) || '',
           timeline: this.getCellValue(row, headers, ['timeline', 'wanneer', 'termijn', 'planning']) || '',
           notes: notes,
-          status: this.parseStatus(this.getCellValue(row, headers, ['status', 'staat', 'fase'])),
-          dealValue: this.parseDealValue(this.getCellValue(row, headers, ['deal waarde', 'dealvalue', 'waarde', 'omzet', 'revenue'])),
+          status: statusValue ? this.parseStatus(statusValue) : 'new',
+          dealValue: dealValue,
+          profit: profit,
           assignedTo: this.getCellValue(row, headers, ['toegewezen', 'assigned', 'verkoper']) || '',
-          createdAt: this.parseDate(this.getCellValue(row, headers, ['datum interesse klant', 'datum', 'date', 'created'])) || new Date(),
+          createdAt: (() => {
+            const dateStr = this.getCellValue(row, headers, ['datum interesse klant', 'datum', 'date', 'created']);
+            const parsedDate = this.parseDate(dateStr);
+            if (!parsedDate && dateStr) {
+              console.warn(`⚠️ Could not parse date "${dateStr}" for lead ${name}, using current date as fallback`);
+            }
+            return parsedDate || new Date();
+          })(),
           updatedAt: new Date(),
           source: 'import',
           sheetRowNumber: index + headerRow + 2, // +2 because sheets are 1-indexed and we skip header
@@ -242,13 +288,15 @@ export class GoogleSheetsService {
 
   // Helper: Parse status from sheet
   private parseStatus(statusText: string): Lead['status'] {
-    const status = statusText.toLowerCase();
+    const status = statusText.toLowerCase().trim();
     
     if (status.includes('nieuw') || status.includes('new')) return 'new';
     if (status.includes('contact') || status.includes('gebeld')) return 'contacted';
     if (status.includes('gekwalificeerd') || status.includes('qualified') || status.includes('interesse')) return 'qualified';
+    if (status.includes('voorstel') || status.includes('proposal') || status.includes('offerte')) return 'proposal';
+    if (status.includes('onderhandel') || status.includes('negotiation')) return 'negotiation';
     if (status.includes('geconverteerd') || status.includes('converted') || status.includes('verkocht') || status.includes('klant')) return 'converted';
-    if (status.includes('geclosed') || status.includes('gesloten') || status.includes('afgerond')) return 'geclosed';
+    if (status.includes('deal') || status.includes('gesloten') || status.includes('afgerond') || status.includes('gewonnen')) return 'deal_closed';
     if (status.includes('verloren') || status.includes('lost') || status.includes('afgewezen')) return 'lost';
     
     return 'new'; // Default
@@ -273,28 +321,79 @@ export class GoogleSheetsService {
     return undefined;
   }
 
-  // Helper: Parse date from sheet
+  // Helper: Parse date from sheet (mobile-friendly)
   private parseDate(dateText: string): Date | null {
     if (!dateText) return null;
     
     try {
-      // Try various date formats
+      // Trim whitespace
+      dateText = dateText.trim();
+      
+      // Try DD-MM-YYYY or DD/MM/YYYY format first (most common in NL sheets)
+      const parts = dateText.split(/[-\/]/);
+      if (parts.length === 3) {
+        let day: number, month: number, year: number;
+        
+        // Check if first part is likely a day (1-31) - DD-MM-YYYY format
+        const firstNum = parseInt(parts[0]);
+        if (firstNum >= 1 && firstNum <= 31) {
+          day = firstNum;
+          month = parseInt(parts[1]) - 1; // Month is 0-indexed
+          year = parseInt(parts[2]);
+          
+          // Handle 2-digit years
+          if (year < 100) {
+            year += year < 50 ? 2000 : 1900;
+          }
+        } 
+        // Otherwise assume YYYY-MM-DD or MM-DD-YYYY
+        else {
+          const secondNum = parseInt(parts[1]);
+          const thirdNum = parseInt(parts[2]);
+          
+          // YYYY-MM-DD format
+          if (firstNum > 31) {
+            year = firstNum;
+            month = secondNum - 1;
+            day = thirdNum;
+          }
+          // MM-DD-YYYY format
+          else {
+            month = firstNum - 1;
+            day = secondNum;
+            year = thirdNum;
+            if (year < 100) {
+              year += year < 50 ? 2000 : 1900;
+            }
+          }
+        }
+        
+        // Validate and create date
+        if (year > 1900 && year < 2100 && month >= 0 && month < 12 && day > 0 && day <= 31) {
+          const parsedDate = new Date(year, month, day);
+          // Verify the date is valid (handles invalid dates like 31 Feb)
+          if (parsedDate.getFullYear() === year && 
+              parsedDate.getMonth() === month && 
+              parsedDate.getDate() === day) {
+            return parsedDate;
+          }
+        }
+      }
+      
+      // Try ISO 8601 format (YYYY-MM-DDTHH:mm:ss)
+      if (dateText.includes('T') || dateText.includes(':')) {
+        const date = new Date(dateText);
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      
+      // Last resort: try native Date parsing (but this is unreliable on mobile)
       const date = new Date(dateText);
-      if (!isNaN(date.getTime())) {
+      if (!isNaN(date.getTime()) && date.getFullYear() > 1900) {
         return date;
       }
       
-      // Try DD-MM-YYYY format
-      const parts = dateText.split(/[-\/]/);
-      if (parts.length === 3) {
-        const day = parseInt(parts[0]);
-        const month = parseInt(parts[1]) - 1; // Month is 0-indexed
-        const year = parseInt(parts[2]);
-        
-        if (year > 1900 && month >= 0 && month < 12 && day > 0 && day <= 31) {
-          return new Date(year, month, day);
-        }
-      }
     } catch (error) {
       console.error('Error parsing date:', dateText, error);
     }
@@ -509,15 +608,13 @@ export const readCustomerLeads = async (spreadsheetUrl: string, apiKey?: string)
 
   console.log('📊 Reading customer leads from spreadsheet:', spreadsheetId.substring(0, 10) + '...');
 
-  // Try different sheet names and ranges - extended to include all columns
+  // Try different sheet names and ranges - 18 columns (A-R) for Thuisbatterijen
   const possibleRanges = [
-    'Sheet1!A1:P1000', // Extended to column P (16 columns)
-    'Leads!A1:P1000', 
-    'A1:P1000',
-    'Sheet1!A:P',
-    'Leads!A:P',
-    'Sheet1!A1:N1000', // Fallback to original
-    'A1:N1000'
+    'Sheet1!A1:R1000', // Column A-R (18 columns)
+    'Leads!A1:R1000', 
+    'A1:R1000',
+    'Sheet1!A:R',
+    'Leads!A:R'
   ];
 
   let rows: any[][] = [];
@@ -568,35 +665,46 @@ export const updateLeadInSheet = async (
   }
 
   console.log(`🔄 Updating lead ${lead.name} in Google Sheets row ${lead.sheetRowNumber}`);
+  console.log(`📊 Lead object before mapping:`, {
+    name: lead.name,
+    phone: lead.phone,
+    email: lead.email,
+    budget: lead.budget,
+    notes: lead.notes,
+    status: lead.status,
+    branchData: lead.branchData
+  });
 
   // Convert lead back to row format matching your spreadsheet columns:
   // 0: Naam Klant, 1: Datum Interesse Klant, 2: Postcode, 3: Huisnummer, 
-  // 4: Telefoonnummer, 5: E-mail, 6: Zonnepanelen, 7: Dynamisch Contract,
-  // 8: Stroomverbruik, 9: Budget, 10: Nieuwsbrief, 11: Reden Thuisbatterij, 12: Koopintentie?
-  // 13: Notities, 14: Status, 15: Deal Waarde
+  // 4: Plaatsnaam, 5: Telefoonnummer, 6: E-mail, 7: Zonnepanelen, 8: Dynamisch contract,
+  // 9: Stroomverbruik, 10: Budget, 11: Nieuwsbrief, 12: Reden Thuisbatterij, 13: Koopintentie?, 
+  // 14: Notities, 15: Status, 16: DealValue, 17: Profit
   const rowData = [
     lead.name, // A - Naam Klant
-    lead.branchData?.datumInteresse || '', // B - Datum Interesse Klant (niet aanpasbaar)
+    lead.branchData?.datumInteresse || '', // B - Datum Interesse Klant
     lead.branchData?.postcode || '', // C - Postcode
     lead.branchData?.huisnummer || '', // D - Huisnummer
-    lead.phone, // E - Telefoonnummer
-    lead.email, // F - E-mail
-    lead.branchData?.zonnepanelen || '', // G - Zonnepanelen
-    lead.branchData?.dynamischContract || '', // H - Dynamisch Contract
-    lead.branchData?.stroomverbruik || '', // I - Stroomverbruik
-    lead.budget || '', // J - Budget
-    lead.branchData?.nieuwsbrief || '', // K - Nieuwsbrief
-    lead.branchData?.redenThuisbatterij || '', // L - Reden Thuisbatterij
-    lead.branchData?.koopintentie || '', // M - Koopintentie?
-    lead.notes || '', // N - Notities
-    lead.status || 'new', // O - Status
-    lead.dealValue ? `€${lead.dealValue.toFixed(2)}` : '' // P - Deal Waarde
+    lead.city || '', // E - Plaatsnaam
+    lead.phone || '', // F - Telefoonnummer
+    lead.email || '', // G - E-mail
+    lead.branchData?.zonnepanelen || '', // H - Zonnepanelen
+    lead.branchData?.dynamischContract || '', // I - Dynamisch contract
+    lead.branchData?.stroomverbruik || '', // J - Stroomverbruik
+    lead.budget || '', // K - Budget
+    lead.branchData?.nieuwsbrief || '', // L - Nieuwsbrief
+    lead.branchData?.redenThuisbatterij || '', // M - Reden Thuisbatterij
+    lead.branchData?.koopintentie || '', // N - Koopintentie?
+    lead.notes || '', // O - Notities
+    lead.status || 'new', // P - Status
+    lead.dealValue ? lead.dealValue.toString() : '', // Q - DealValue (omzet)
+    lead.profit ? lead.profit.toString() : '' // R - Profit (winst)
   ];
 
   console.log(`🔄 Row data for ${lead.name}:`, rowData);
 
-  // Update the specific row - extended range to include all columns
-  const range = `A${lead.sheetRowNumber}:P${lead.sheetRowNumber}`;
+  // Update the specific row - range A to R (18 columns total)
+  const range = `A${lead.sheetRowNumber}:R${lead.sheetRowNumber}`;
   
   try {
     const result = await service.updateSheet(spreadsheetId, range, [rowData]);
@@ -625,7 +733,7 @@ export const addLeadToSheet = async (
 
   try {
     // First, read the current data to find the next available row
-    const currentData = await service.readSheet(spreadsheetId, 'A:P');
+    const currentData = await service.readSheet(spreadsheetId, 'A:R');
     
     if (currentData.length === 0) {
       throw new Error('Could not read current spreadsheet data');
@@ -633,30 +741,32 @@ export const addLeadToSheet = async (
 
     // Find the next available row (after headers and existing data)
     const nextRowIndex = currentData.length + 1;
-    const range = `A${nextRowIndex}:P${nextRowIndex}`;
+    const range = `A${nextRowIndex}:R${nextRowIndex}`;
 
     // Convert lead to row format matching your spreadsheet columns:
     // 0: Naam Klant, 1: Datum Interesse Klant, 2: Postcode, 3: Huisnummer, 
-    // 4: Telefoonnummer, 5: E-mail, 6: Zonnepanelen, 7: Dynamisch Contract,
-    // 8: Stroomverbruik, 9: Budget, 10: Nieuwsbrief, 11: Reden Thuisbatterij, 12: Koopintentie?
-    // 13: Notities, 14: Status, 15: Deal Waarde
+    // 4: Plaatsnaam, 5: Telefoonnummer, 6: E-mail, 7: Zonnepanelen, 8: Dynamisch contract,
+    // 9: Stroomverbruik, 10: Budget, 11: Nieuwsbrief, 12: Reden Thuisbatterij, 13: Koopintentie?, 
+    // 14: Notities, 15: Status, 16: DealValue, 17: Profit
     const rowData = [
       lead.name, // A - Naam Klant
       new Date().toLocaleDateString('nl-NL'), // B - Datum Interesse Klant (huidige datum)
       lead.branchData?.postcode || '', // C - Postcode
       lead.branchData?.huisnummer || '', // D - Huisnummer
-      lead.phone, // E - Telefoonnummer
-      lead.email, // F - E-mail
-      lead.branchData?.zonnepanelen || '', // G - Zonnepanelen
-      lead.branchData?.dynamischContract || '', // H - Dynamisch Contract
-      lead.branchData?.stroomverbruik || '', // I - Stroomverbruik
-      lead.budget || '', // J - Budget
-      lead.branchData?.nieuwsbrief || '', // K - Nieuwsbrief
-      lead.branchData?.redenThuisbatterij || '', // L - Reden Thuisbatterij
-      lead.branchData?.koopintentie || '', // M - Koopintentie?
-      lead.notes || '', // N - Notities
-      lead.status || 'new', // O - Status
-      lead.dealValue ? `€${lead.dealValue.toFixed(2)}` : '' // P - Deal Waarde
+      lead.city || '', // E - Plaatsnaam
+      lead.phone, // F - Telefoonnummer
+      lead.email, // G - E-mail
+      lead.branchData?.zonnepanelen || '', // H - Zonnepanelen
+      lead.branchData?.dynamischContract || '', // I - Dynamisch contract
+      lead.branchData?.stroomverbruik || '', // J - Stroomverbruik
+      lead.budget || '', // K - Budget
+      lead.branchData?.nieuwsbrief || '', // L - Nieuwsbrief
+      lead.branchData?.redenThuisbatterij || '', // M - Reden Thuisbatterij
+      lead.branchData?.koopintentie || '', // N - Koopintentie?
+      lead.notes || '', // O - Notities
+      lead.status || 'new', // P - Status
+      lead.dealValue ? lead.dealValue.toString() : '', // Q - DealValue (omzet)
+      lead.profit ? lead.profit.toString() : '' // R - Profit (winst)
     ];
 
     console.log(`🔄 Adding lead ${lead.name} to row ${nextRowIndex}:`, rowData);

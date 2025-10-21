@@ -7,6 +7,7 @@ import {
   MagnifyingGlassIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
+import { getFirstAdminEmail } from '@/config/admin';
 
 export function AdminHeader() {
   return (
@@ -62,7 +63,7 @@ export function AdminHeader() {
               <UserCircleIcon className="w-8 h-8" />
               <div className="hidden md:block text-left">
                 <div className="text-sm font-medium">Admin User</div>
-                <div className="text-xs text-gray-500">admin@warmeleads.eu</div>
+                <div className="text-xs text-gray-500">{getFirstAdminEmail()}</div>
               </div>
             </motion.button>
             

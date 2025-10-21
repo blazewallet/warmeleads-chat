@@ -1,5 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { ADMIN_CONFIG } from '@/config/admin';
+
+export interface UserPermissions {
+  canViewLeads: boolean;
+  canViewOrders: boolean;
+  canManageEmployees: boolean;
+  canCheckout: boolean;
+}
 
 export interface User {
   id: string;
@@ -11,6 +19,12 @@ export interface User {
   lastLogin: Date;
   isGuest: boolean;
   orders: Order[];
+  
+  // Employee system fields
+  role?: 'owner' | 'employee';
+  companyId?: string; // Email of the owner
+  ownerEmail?: string; // Email of the owner
+  permissions?: UserPermissions;
 }
 
 export interface Order {
@@ -56,75 +70,149 @@ export interface GuestData {
   phone?: string;
 }
 
-// Mock database for demo purposes
-const mockUsers: User[] = [
-  {
-    id: 'user_1',
-    email: 'demo@warmeleads.eu',
-    name: 'Demo Gebruiker',
-    company: 'Demo BV',
-    phone: '+31 85 047 7067',
-    createdAt: new Date(),
-    lastLogin: new Date(),
-    isGuest: false,
-    orders: [
-      {
-        id: 'order_1',
-        type: 'Exclusieve Thuisbatterij Leads',
-        quantity: 50,
-        status: 'delivered',
-        date: '2024-01-15',
-        amount: 2000,
-        leads: 47,
-        conversions: 12
+export interface EmployeeAccount {
+  email: string;
+  name: string;
+  role: 'employee';
+  permissions: UserPermissions;
+  invitedAt: string;
+  acceptedAt?: string;
+  isActive: boolean;
+}
+
+export interface Company {
+  id: string;
+  ownerEmail: string;
+  companyName: string;
+  employees: EmployeeAccount[];
+  createdAt: string;
+}
+
+// Mock database for demo purposes - dynamically generated from config
+const getMockUsers = (): User[] => {
+  const users: User[] = [];
+  
+  // Add demo account if configured
+  if (ADMIN_CONFIG.demoAccount) {
+    users.push({
+      id: 'user_demo',
+      email: ADMIN_CONFIG.demoAccount.email,
+      name: ADMIN_CONFIG.demoAccount.name,
+      company: ADMIN_CONFIG.demoAccount.company,
+      phone: '+31 85 047 7067',
+      createdAt: new Date(),
+      lastLogin: new Date(),
+      isGuest: false,
+      role: 'owner',
+      permissions: {
+        canViewLeads: true,
+        canViewOrders: true,
+        canManageEmployees: true,
+        canCheckout: true,
       },
-      {
-        id: 'order_2',
-        type: 'Gedeelde Zonnepaneel Leads',
-        quantity: 500,
-        status: 'active',
-        date: '2024-01-20',
-        amount: 7500,
-        leads: 423,
-        conversions: 89
-      }
-    ]
-  },
-  {
-    id: 'user_2',
-    email: 'h.schlimback@gmail.com',
-    name: 'Rick Schlimback',
-    company: 'WarmeLeads BV',
-    phone: '+31 61 392 7338',
-    createdAt: new Date('2025-09-20'),
-    lastLogin: new Date(),
-    isGuest: false,
-    orders: [
-      {
-        id: 'order_rick_1',
-        type: 'Exclusieve Thuisbatterij Leads',
-        quantity: 30,
-        status: 'delivered',
-        date: '2025-09-29',
-        amount: 1200,
-        leads: 31,
-        conversions: 8
-      }
-    ]
-  },
-  {
-    id: 'user_3',
-    email: 'rick@warmeleads.eu',
-    name: 'Rick Admin',
-    company: 'WarmeLeads',
-    phone: '+31 85 047 7067',
-    createdAt: new Date(),
-    lastLogin: new Date(),
-    isGuest: false,
-    orders: []
+      orders: [
+        {
+          id: 'order_1',
+          type: 'Exclusieve Thuisbatterij Leads',
+          quantity: 50,
+          status: 'delivered',
+          date: '2024-01-15',
+          amount: 2000,
+          leads: 47,
+          conversions: 12
+        },
+        {
+          id: 'order_2',
+          type: 'Gedeelde Zonnepaneel Leads',
+          quantity: 500,
+          status: 'active',
+          date: '2024-01-20',
+          amount: 7500,
+          leads: 423,
+          conversions: 89
+        }
+      ]
+    });
   }
-];
+  
+  // Add admin accounts
+  ADMIN_CONFIG.adminEmails.forEach((adminEmail, index) => {
+    users.push({
+      id: `user_admin_${index}`,
+      email: adminEmail,
+      name: adminEmail.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      company: 'WarmeLeads BV',
+      phone: '+31 61 392 7338',
+      createdAt: new Date('2025-09-20'),
+      lastLogin: new Date(),
+      isGuest: false,
+      role: 'owner',
+      permissions: {
+        canViewLeads: true,
+        canViewOrders: true,
+        canManageEmployees: true,
+        canCheckout: true,
+      },
+      orders: []
+    });
+  });
+  
+  return users;
+};
+
+const mockUsers: User[] = getMockUsers();
 let nextUserId = 4;
+
+// Helper function to get default permissions for owners
+const getDefaultOwnerPermissions = (): UserPermissions => ({
+  canViewLeads: true,
+  canViewOrders: true,
+  canManageEmployees: true,
+  canCheckout: true,
+});
+
+// Helper function to get default permissions for employees
+const getDefaultEmployeePermissions = (): UserPermissions => ({
+  canViewLeads: true,
+  canViewOrders: true,
+  canManageEmployees: false,
+  canCheckout: false,
+});
+
+// Helper function to load employee/company data
+const loadUserWithCompanyData = async (user: User): Promise<User> => {
+  try {
+    // If user has companyId/ownerEmail, load company data
+    if (user.companyId || user.ownerEmail) {
+      const companyResponse = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.companyId || user.ownerEmail || '')}`);
+      if (companyResponse.ok) {
+        const companyData = await companyResponse.json();
+        if (companyData.success && companyData.company) {
+          // Merge company info into user
+          user.company = user.company || companyData.company.companyName;
+        }
+      }
+    }
+    
+    // Ensure permissions are set
+    if (!user.permissions) {
+      user.permissions = user.role === 'owner' 
+        ? getDefaultOwnerPermissions() 
+        : getDefaultEmployeePermissions();
+    }
+    
+    return user;
+  } catch (error) {
+    console.error('Error loading company data:', error);
+    // Return user with default permissions if loading fails
+    if (!user.permissions) {
+      user.permissions = user.role === 'owner' 
+        ? getDefaultOwnerPermissions() 
+        : getDefaultEmployeePermissions();
+    }
+    return user;
+  }
+};
 
 // Simple auth store without complex state management
 let authState = {
@@ -157,32 +245,119 @@ export const useAuthStore = create<AuthState>()(
       set({ isLoading: true, error: null });
       
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        // First check for hardcoded demo accounts (backwards compatibility)
+        let user: User | null = null;
         const existingUser = mockUsers.find(u => u.email === email);
         
-        if (!existingUser) {
-          throw new Error('Gebruiker niet gevonden');
+        if (existingUser) {
+          // Check password for existing mock users
+          let validPassword = false;
+          
+          // Check demo account
+          if (ADMIN_CONFIG.demoAccount && 
+              email === ADMIN_CONFIG.demoAccount.email && 
+              password === ADMIN_CONFIG.demoAccount.password) {
+            validPassword = true;
+          }
+          
+          // Check if it's an admin account (they all use the same password for now)
+          if (ADMIN_CONFIG.adminEmails.includes(email) && password === 'Ab49n805!') {
+            validPassword = true;
+          }
+          
+          if (validPassword) {
+            user = { ...existingUser, lastLogin: new Date() };
+            
+            // Try to get updated profile data from Blob Storage for demo/admin accounts too
+            try {
+              const profileResponse = await fetch(`/api/auth/get-profile?email=${encodeURIComponent(email)}`);
+              if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                if (profileData.success && profileData.user) {
+                  // Merge updated profile data including role/permissions
+                  user = {
+                    ...user,
+                    name: profileData.user.name || user.name,
+                    company: profileData.user.company || user.company,
+                    phone: profileData.user.phone || user.phone,
+                    role: profileData.user.role || user.role || 'owner',
+                    companyId: profileData.user.companyId || user.companyId,
+                    ownerEmail: profileData.user.ownerEmail || user.ownerEmail,
+                    permissions: profileData.user.permissions || user.permissions,
+                  };
+                  console.log('✅ Updated profile data loaded from Blob Storage for demo/admin account');
+                }
+              }
+            } catch (profileError) {
+              console.log('ℹ️ Could not load updated profile data for demo/admin account, using mock data:', profileError);
+            }
+          }
         }
         
-        // Check password based on user type
-        let validPassword = false;
-        if (email === 'demo@warmeleads.eu' && password === 'demo123') {
-          validPassword = true;
-        } else if (email === 'h.schlimback@gmail.com' && password === 'Ab49n805!') {
-          validPassword = true;
-        } else if (email === 'rick@warmeleads.eu' && password === 'Ab49n805!') {
-          validPassword = true;
+        // If not a mock user, try real API login
+        if (!user) {
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          
+          const data = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(data.error || 'Ongeldig emailadres of wachtwoord');
+          }
+          
+          // Create base user from API response
+          user = {
+            id: data.user.email,
+            email: data.user.email,
+            name: data.user.name,
+            company: data.user.company,
+            phone: data.user.phone,
+            createdAt: new Date(data.user.createdAt),
+            lastLogin: new Date(),
+            isGuest: false,
+            orders: [],
+            role: data.user.role || 'owner',
+            companyId: data.user.companyId,
+            ownerEmail: data.user.ownerEmail,
+            permissions: data.user.permissions
+          };
+
+          // Try to get updated profile data from Blob Storage
+          try {
+            const profileResponse = await fetch(`/api/auth/get-profile?email=${encodeURIComponent(email)}`);
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json();
+              if (profileData.success && profileData.user) {
+                // Merge updated profile data including role/permissions
+                user = {
+                  ...user,
+                  name: profileData.user.name || user.name,
+                  company: profileData.user.company || user.company,
+                  phone: profileData.user.phone || user.phone,
+                  role: profileData.user.role || user.role || 'owner',
+                  companyId: profileData.user.companyId || user.companyId,
+                  ownerEmail: profileData.user.ownerEmail || user.ownerEmail,
+                  permissions: profileData.user.permissions || user.permissions,
+                };
+                console.log('✅ Updated profile data loaded from Blob Storage');
+              }
+            }
+          } catch (profileError) {
+            console.log('ℹ️ Could not load updated profile data, using API response:', profileError);
+          }
         }
         
-        if (!validPassword) {
-          throw new Error('Ongeldig wachtwoord');
+        if (!user) {
+          throw new Error('Ongeldig emailadres of wachtwoord');
         }
         
-        const user = { ...existingUser, lastLogin: new Date() };
+        // Load company data and ensure permissions are set
+        user = await loadUserWithCompanyData(user);
         
-        console.log('🔐 LOGIN SUCCESS:', { email, isAuthenticated: true });
+        console.log('🔐 LOGIN SUCCESS:', { email, isAuthenticated: true, role: user.role });
         
         // Update local state
         authState.user = user;
@@ -217,6 +392,9 @@ export const useAuthStore = create<AuthState>()(
           error: errorMessage, 
           isLoading: false 
         });
+        
+        // IMPORTANT: Re-throw the error so LoginForm knows login failed
+        throw error;
       }
     },
 
@@ -224,28 +402,55 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Call real API to register in Blob Storage
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData)
+          });
           
-          const existingUser = mockUsers.find(u => u.email === userData.email);
+          const data = await response.json();
           
-          if (existingUser) {
-            throw new Error('Email is al in gebruik');
+          if (!response.ok) {
+            throw new Error(data.error || 'Registratie mislukt');
           }
           
           const newUser: User = {
-            id: `user_${nextUserId++}`,
-            email: userData.email,
-            name: userData.name,
-            company: userData.company,
-            phone: userData.phone,
-            createdAt: new Date(),
+            id: data.user.email,
+            email: data.user.email,
+            name: data.user.name,
+            company: data.user.company,
+            phone: data.user.phone,
+            createdAt: new Date(data.user.createdAt),
             lastLogin: new Date(),
             isGuest: false,
             orders: []
           };
           
-          mockUsers.push(newUser);
+          // ALSO add to CRM system so the customer appears in admin
+          try {
+            const { crmSystem } = await import('./crmSystem');
+            
+            // Use createOrUpdateCustomer to add/update in CRM
+            const customer = crmSystem.createOrUpdateCustomer({
+              email: userData.email,
+              name: userData.name,
+              company: userData.company,
+              phone: userData.phone,
+              source: 'direct'
+            });
+            
+            // Mark as having account
+            crmSystem.updateCustomer(customer.id, {
+              hasAccount: true,
+              accountCreatedAt: new Date()
+            });
+            
+            console.log('✅ Customer synced to CRM system:', userData.email);
+          } catch (crmError) {
+            console.error('⚠️ Error syncing customer to CRM:', crmError);
+            // Don't fail the registration if CRM sync fails
+          }
           
           set({ 
             user: newUser, 
@@ -259,6 +464,7 @@ export const useAuthStore = create<AuthState>()(
             error: error instanceof Error ? error.message : 'Registratie mislukt', 
             isLoading: false 
           });
+          throw error;
         }
       },
 
@@ -347,6 +553,31 @@ export const useAuthStore = create<AuthState>()(
           };
           
           mockUsers.push(newUser);
+          
+          // ALSO add to CRM system so the customer appears in admin
+          try {
+            const { crmSystem } = await import('./crmSystem');
+            
+            // Use createOrUpdateCustomer to add/update in CRM
+            const customer = crmSystem.createOrUpdateCustomer({
+              email: userData.email,
+              name: userData.name,
+              company: userData.company,
+              phone: userData.phone,
+              source: 'direct'
+            });
+            
+            // Mark as having account
+            crmSystem.updateCustomer(customer.id, {
+              hasAccount: true,
+              accountCreatedAt: new Date()
+            });
+            
+            console.log('✅ Customer synced to CRM system (from guest):', userData.email);
+          } catch (crmError) {
+            console.error('⚠️ Error syncing customer to CRM:', crmError);
+            // Don't fail the registration if CRM sync fails
+          }
           
           set({ 
             user: newUser, 

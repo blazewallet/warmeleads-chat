@@ -1,22 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe, handleSuccessfulPayment } from '@/lib/stripe';
+import { stripe, handleSuccessfulPayment, formatPrice } from '@/lib/stripe';
+import { generateInvoiceNumber, generateInvoiceHTML, type InvoiceData } from '@/lib/invoiceGenerator';
 import Stripe from 'stripe';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 export async function POST(req: NextRequest) {
   try {
+    // Debug logging
+    console.log('🔔 Webhook received');
+    console.log('📋 Has webhook secret:', !!webhookSecret);
+    console.log('🔑 Secret length:', webhookSecret?.length || 0);
+    console.log('🔑 Secret prefix:', webhookSecret?.substring(0, 10) || 'undefined');
+    
+    if (!webhookSecret) {
+      console.error('❌ STRIPE_WEBHOOK_SECRET is not set!');
+      return NextResponse.json(
+        { error: 'Webhook secret not configured' },
+        { status: 500 }
+      );
+    }
+    
     const body = await req.text();
     const signature = req.headers.get('stripe-signature')!;
+    
+    console.log('📝 Body length:', body.length);
+    console.log('✍️ Has signature:', !!signature);
 
     let event: Stripe.Event;
 
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      console.log('✅ Signature verified successfully');
     } catch (err) {
-      console.error('Webhook signature verification failed:', err);
+      console.error('❌ Webhook signature verification failed:', err);
+      console.error('Error details:', err instanceof Error ? err.message : 'Unknown error');
       return NextResponse.json(
-        { error: 'Webhook signature verification failed' },
+        { error: 'Webhook signature verification failed', details: err instanceof Error ? err.message : 'Unknown' },
         { status: 400 }
       );
     }
@@ -45,6 +65,23 @@ export async function POST(req: NextRequest) {
         
         // Handle failed payment
         await handleFailedPayment(paymentIntent);
+        
+        break;
+      }
+      
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        console.log('✅ Checkout session completed:', session.id);
+        
+        // Save order to Blob Storage (this also generates PDF invoice)
+        const order = await saveOrderFromSession(session);
+        
+        // Generate and send invoice (legacy HTML invoice)
+        await generateAndSendInvoice(session);
+        
+        // Send lead delivery notification with PDF invoice
+        const invoiceUrl = order && 'invoiceUrl' in order ? (order as any).invoiceUrl : undefined;
+        await sendLeadDeliveryNotificationFromSession(session, invoiceUrl);
         
         break;
       }
@@ -188,32 +225,311 @@ async function triggerLeadDelivery(orderData: {
   }
 }
 
-// Voeg bestelling toe aan admin dashboard
+// Voeg bestelling toe aan Blob Storage
 async function addOrderToAdmin(paymentIntent: any) {
   try {
+    const timestamp = Date.now();
+    const orderNumber = `WL-${new Date().getFullYear()}-${String(timestamp).slice(-6)}`;
+    
     const orderData = {
-      orderNumber: `WL-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
+      id: `order_${timestamp}`,
+      orderNumber,
       customerName: paymentIntent.metadata.customerName || 'Onbekend',
-      customerEmail: paymentIntent.receipt_email || 'onbekend@email.com',
+      customerEmail: paymentIntent.receipt_email || paymentIntent.metadata.customerEmail || 'onbekend@email.com',
+      customerCompany: paymentIntent.metadata.customerCompany || undefined,
+      packageId: paymentIntent.metadata.packageId || 'unknown',
+      packageName: paymentIntent.description || 'Lead Package',
       industry: paymentIntent.metadata.industry || 'Onbekend',
-      leadType: paymentIntent.metadata.leadType || 'Leads',
-      quantity: paymentIntent.metadata.quantity || '1',
-      amount: paymentIntent.amount / 100, // Convert from cents
+      leadType: paymentIntent.metadata.leadType || 'exclusive',
+      quantity: parseInt(paymentIntent.metadata.leadQuantity || paymentIntent.metadata.quantity || '1'),
+      pricePerLead: parseInt(paymentIntent.metadata.pricePerLead || '0'),
+      totalAmount: paymentIntent.amount, // in cents
+      currency: paymentIntent.currency.toUpperCase(),
       status: 'completed',
-      orderDate: new Date().toISOString(),
       paymentMethod: 'Stripe',
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
+      createdAt: new Date().toISOString(),
     };
 
-    console.log('📋 Echte bestelling toegevoegd aan admin:', orderData);
+    console.log('📋 Saving order to Blob Storage:', orderData.orderNumber);
     
-    // In productie zou dit naar database gaan
-    // Voor nu loggen we het voor tracking
+    // Save order via API
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.warmeleads.eu'}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order: orderData }),
+    });
+
+    if (response.ok) {
+      console.log('✅ Order saved successfully:', orderNumber);
+    } else {
+      const error = await response.text();
+      console.error('❌ Failed to save order:', error);
+    }
     
     return orderData;
     
   } catch (error) {
     console.error('Failed to add order to admin:', error);
+  }
+}
+
+async function generateAndSendInvoice(session: Stripe.Checkout.Session) {
+  try {
+    console.log('📄 Generating invoice for session:', session.id);
+    
+    // Extract metadata
+    const metadata = session.metadata || {};
+    const customerEmail = session.customer_email || session.customer_details?.email || '';
+    const customerName = metadata.customerName || session.customer_details?.name || 'Klant';
+    
+    // Generate invoice data
+    const invoiceData: InvoiceData = {
+      invoiceNumber: generateInvoiceNumber(),
+      invoiceDate: new Date().toISOString(),
+      customerName,
+      customerEmail,
+      customerCompany: metadata.customerCompany,
+      packageName: session.line_items?.data[0]?.description || metadata.packageId || 'Lead Package',
+      packageDescription: metadata.industry ? `${metadata.leadQuantity} leads voor ${metadata.industry}` : 'Lead pakket',
+      quantity: parseInt(metadata.orderQuantity || '1'),
+      unitPrice: session.amount_total || 0,
+      totalPrice: session.amount_total || 0,
+      currency: session.currency || 'eur',
+      paymentMethod: session.payment_method_types?.[0] || 'card',
+      transactionId: session.payment_intent as string || session.id,
+    };
+    
+    // Generate invoice HTML
+    const invoiceHTML = generateInvoiceHTML(invoiceData);
+    
+    console.log('✅ Invoice generated:', invoiceData.invoiceNumber);
+    
+    // TODO: Send invoice via email service
+    // For now, we'll log it
+    console.log('📧 Invoice would be sent to:', customerEmail);
+    
+    // Store invoice in blob storage or database
+    await storeInvoice(invoiceData, invoiceHTML);
+    
+    return invoiceData;
+  } catch (error) {
+    console.error('Failed to generate invoice:', error);
+    throw error;
+  }
+}
+
+async function generateAndStorePDFInvoice(orderData: any): Promise<string | null> {
+  try {
+    console.log('📄 Generating PDF invoice for order:', orderData.orderNumber);
+    
+    // Import PDF generator
+    const { generateInvoicePDF } = await import('@/lib/pdfInvoiceGenerator');
+    
+    const invoiceData = {
+      invoiceNumber: `INV-${orderData.orderNumber}`,
+      invoiceDate: orderData.createdAt,
+      orderNumber: orderData.orderNumber,
+      customerName: orderData.customerName,
+      customerEmail: orderData.customerEmail,
+      customerCompany: orderData.customerCompany,
+      packageName: orderData.packageName,
+      industry: orderData.industry,
+      quantity: orderData.quantity,
+      pricePerLead: orderData.pricePerLead,
+      totalAmountExclVAT: orderData.totalAmount,
+      vatAmount: orderData.vatAmount,
+      totalAmountInclVAT: orderData.totalAmountInclVAT,
+      vatPercentage: orderData.vatPercentage,
+      currency: orderData.currency,
+      paymentMethod: orderData.paymentMethod,
+    };
+    
+    // Generate PDF
+    const pdfBuffer = await generateInvoicePDF(invoiceData);
+    
+    // Store PDF in Blob Storage
+    const { put } = await import('@vercel/blob');
+    
+    const filename = `invoices/${orderData.customerEmail}/INV-${orderData.orderNumber}.pdf`;
+    const blob = await put(filename, pdfBuffer, {
+      access: 'public',
+      contentType: 'application/pdf',
+    });
+    
+    console.log('✅ PDF invoice stored:', blob.url);
+    return blob.url;
+    
+  } catch (error) {
+    console.error('❌ Error generating PDF invoice:', error);
+    return null;
+  }
+}
+
+async function sendLeadDeliveryNotificationFromSession(session: Stripe.Checkout.Session, invoiceUrl?: string) {
+  try {
+    const customerEmail = session.customer_email || session.customer_details?.email;
+    const customerName = session.metadata?.customerName || session.customer_details?.name || 'Klant';
+    
+    if (customerEmail) {
+      console.log('📧 Preparing to send order confirmation emails');
+      
+      // Import email service
+      const { sendOrderConfirmationEmail, sendAdminOrderNotification } = await import('@/lib/emailService');
+      
+      const metadata = session.metadata || {};
+      const timestamp = Date.now();
+      const orderNumber = `WL-${new Date().getFullYear()}-${String(timestamp).slice(-6)}`;
+      
+      const emailData = {
+        customerName,
+        customerEmail,
+        orderNumber,
+        packageName: session.line_items?.data?.[0]?.description || metadata.packageId || 'Lead Package',
+        industry: metadata.industry || 'Onbekend',
+        quantity: parseInt(metadata.leadQuantity || metadata.orderQuantity || '1'),
+        totalAmount: session.amount_total || 0,
+        currency: (session.currency || 'eur').toUpperCase(),
+        paymentMethod: session.payment_method_types?.[0] || 'card',
+        invoiceUrl: undefined, // Will be set by generateAndSendInvoice
+      };
+      
+      // Send customer confirmation email with PDF invoice
+      const customerEmailSent = await sendOrderConfirmationEmail(emailData, invoiceUrl);
+      
+      if (customerEmailSent) {
+        console.log('✅ Customer confirmation email sent to:', customerEmail);
+      } else {
+        console.error('❌ Failed to send customer confirmation email');
+      }
+      
+      // Send admin notification email
+      const adminEmailSent = await sendAdminOrderNotification(emailData);
+      
+      if (adminEmailSent) {
+        console.log('✅ Admin notification email sent to: info@warmeleads.eu');
+      } else {
+        console.error('❌ Failed to send admin notification email');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to send notifications:', error);
+  }
+}
+
+async function storeInvoice(invoiceData: InvoiceData, invoiceHTML: string) {
+  try {
+    // Store invoice in blob storage
+    const { put } = await import('@vercel/blob');
+    
+    const blob = await put(
+      `invoices/${invoiceData.invoiceNumber}.html`,
+      invoiceHTML,
+      {
+        access: 'public',
+        contentType: 'text/html',
+      }
+    );
+    
+    console.log('✅ Invoice stored:', blob.url);
+    
+    // TODO: Also store invoice metadata in database
+    // For tracking and retrieval
+    
+    return blob.url;
+  } catch (error) {
+    console.error('Failed to store invoice:', error);
+    // Don't throw - invoice generation should not fail the webhook
+  }
+}
+
+// Save order from checkout session
+async function saveOrderFromSession(session: Stripe.Checkout.Session) {
+  try {
+    const timestamp = Date.now();
+    const orderNumber = `WL-${new Date().getFullYear()}-${String(timestamp).slice(-6)}`;
+    
+    const metadata = session.metadata || {};
+    const customerEmail = session.customer_email || session.customer_details?.email || 'unknown@email.com';
+    
+    // Import VAT calculator
+    const { calculateVAT, VAT_PERCENTAGE } = await import('@/lib/vatCalculator');
+    
+    // Calculate VAT (bedragen in Stripe zijn EXCL BTW)
+    const pricePerLead = parseInt(metadata.pricePerLead || '0');
+    const quantity = parseInt(metadata.leadQuantity || metadata.orderQuantity || '1');
+    const totalAmountExclVAT = pricePerLead * quantity;
+    
+    const vatBreakdown = calculateVAT(totalAmountExclVAT);
+    
+    const orderData = {
+      id: `order_${timestamp}`,
+      orderNumber,
+      customerName: metadata.customerName || session.customer_details?.name || 'Onbekend',
+      customerEmail,
+      customerCompany: metadata.customerCompany || undefined,
+      packageId: metadata.packageId || 'unknown',
+      packageName: session.line_items?.data?.[0]?.description || metadata.industry || 'Lead Package',
+      industry: metadata.industry || 'Onbekend',
+      leadType: (metadata.leadType as 'exclusive' | 'shared') || 'exclusive',
+      quantity,
+      pricePerLead, // EXCL VAT
+      totalAmount: vatBreakdown.amountExclVAT, // EXCL VAT
+      vatAmount: vatBreakdown.vatAmount,
+      totalAmountInclVAT: vatBreakdown.amountInclVAT, // INCL VAT
+      vatPercentage: VAT_PERCENTAGE,
+      currency: (session.currency || 'eur').toUpperCase(),
+      status: 'completed' as const,
+      paymentMethod: session.payment_method_types?.[0] || 'card',
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent as string || undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    console.log('📋 Saving order from session to Blob Storage:', orderData.orderNumber);
+    
+    // Save order via API
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.warmeleads.eu'}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order: orderData }),
+    });
+
+    if (response.ok) {
+      console.log('✅ Order from session saved successfully:', orderNumber);
+      
+      // Generate PDF invoice and store it
+      const invoiceUrl = await generateAndStorePDFInvoice(orderData);
+      
+      if (invoiceUrl) {
+        // Update order with invoice URL
+        const updatedOrderData = {
+          ...orderData,
+          invoiceUrl,
+          invoiceNumber: `INV-${orderData.orderNumber}`
+        };
+        
+        // Re-save order with invoice URL
+        await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.warmeleads.eu'}/api/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: updatedOrderData }),
+        });
+        
+        console.log('✅ Invoice generated and stored:', invoiceUrl);
+        return updatedOrderData;
+      }
+      
+      return orderData;
+    } else {
+      const error = await response.text();
+      console.error('❌ Failed to save order from session:', error);
+      throw new Error(`Failed to save order: ${error}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error saving order from session:', error);
+    throw error;
   }
 }
 

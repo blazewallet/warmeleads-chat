@@ -166,9 +166,9 @@ export default function CRMDashboard() {
     new: leads.filter(l => l.status === 'new').length,
     contacted: leads.filter(l => l.status === 'contacted').length,
     qualified: leads.filter(l => l.status === 'qualified').length,
-    converted: leads.filter(l => l.status === 'converted').length,
+    converted: leads.filter(l => l.status === 'converted' || l.status === 'deal_closed').length,
     lost: leads.filter(l => l.status === 'lost').length,
-    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted').length / leads.length) * 100 : 0
+    conversionRate: leads.length > 0 ? (leads.filter(l => l.status === 'converted' || l.status === 'deal_closed').length / leads.length) * 100 : 0
   };
 
   if (authLoading || isLoading) {

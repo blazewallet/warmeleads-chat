@@ -18,6 +18,7 @@ import { ContactCard } from './ContactCard';
 import { SimpleValueCard } from './SimpleValueCard';
 import { ChatContextManager } from '../lib/chatContext';
 import { useAuthStore } from '../lib/auth';
+import { OrderCheckoutModal } from './OrderCheckoutModal';
 
 interface LandingPageProps {
   onPathSelect: (path: 'direct' | 'learn' | 'questions' | 'customer') => void;
@@ -25,6 +26,7 @@ interface LandingPageProps {
 
 export function LandingPage({ onPathSelect }: LandingPageProps) {
   const [visitorType, setVisitorType] = useState<'new' | 'returning' | 'customer'>('new');
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const { user, isAuthenticated } = useAuthStore();
 
   const handleContactSelect = (method: 'phone' | 'email' | 'whatsapp') => {
@@ -260,6 +262,9 @@ export function LandingPage({ onPathSelect }: LandingPageProps) {
                 onClick={() => {
                   if (option.id === 'gids') {
                     window.location.href = '/leadgeneratie-gids';
+                  } else if (option.id === 'direct') {
+                    // Open checkout modal directly
+                    setShowCheckoutModal(true);
                   } else {
                     onPathSelect(option.id as any);
                   }
@@ -453,9 +458,41 @@ export function LandingPage({ onPathSelect }: LandingPageProps) {
             >
               📝 Blog & Tips
             </a>
+            <span className="text-white/30">•</span>
+            <a 
+              href="/algemene-voorwaarden" 
+              className="text-white/50 hover:text-white/80 text-xs underline transition-colors"
+            >
+              📋 Algemene voorwaarden
+            </a>
+            <span className="text-white/30">•</span>
+            <a 
+              href="/privacyverklaring" 
+              className="text-white/50 hover:text-white/80 text-xs underline transition-colors"
+            >
+              🔒 Privacyverklaring
+            </a>
+          </div>
+          
+          {/* Bedrijfsgegevens */}
+          <div className="mt-6 pt-6 border-t border-white/20">
+            <p className="text-white/50 text-xs">
+              Warmeleads.eu • KvK: 88929280 • Stavangerweg 21-1, 9723 JC Groningen
+            </p>
           </div>
         </motion.div>
       </div>
+
+
+      {/* Order Checkout Modal */}
+      <OrderCheckoutModal
+        isOpen={showCheckoutModal}
+        onClose={() => setShowCheckoutModal(false)}
+        userEmail={user?.email || ''}
+        userName={user?.name || ''}
+        userCompany={user?.company}
+        requireAuth={!isAuthenticated}
+      />
     </div>
   );
 }

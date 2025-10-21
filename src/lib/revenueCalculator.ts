@@ -12,7 +12,7 @@ export interface RevenueStats {
  * Calculate revenue from closed deals
  */
 export function calculateRevenueFromLeads(leads: Lead[]): RevenueStats {
-  const closedLeads = leads.filter(lead => lead.status === 'geclosed' && lead.dealValue);
+  const closedLeads = leads.filter(lead => lead.status === 'deal_closed' && lead.dealValue);
   
   const totalRevenue = closedLeads.reduce((sum, lead) => sum + (lead.dealValue || 0), 0);
   const closedDeals = closedLeads.length;
@@ -60,7 +60,7 @@ export function getStatusColor(status: Lead['status']): string {
       return 'bg-orange-100 text-orange-800';
     case 'converted':
       return 'bg-green-100 text-green-800';
-    case 'geclosed':
+    case 'deal_closed':
       return 'bg-emerald-100 text-emerald-800';
     case 'lost':
       return 'bg-red-100 text-red-800';
@@ -86,11 +86,12 @@ export function getStatusLabel(status: Lead['status']): string {
       return 'Onderhandeling';
     case 'converted':
       return 'Geconverteerd';
-    case 'geclosed':
-      return 'Geclosed';
+    case 'deal_closed':
+      return 'Deal gesloten';
     case 'lost':
       return 'Verloren';
     default:
       return 'Onbekend';
   }
 }
+

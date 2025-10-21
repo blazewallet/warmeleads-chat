@@ -41,9 +41,6 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
   const [selectedEmoji, setSelectedEmoji] = useState('📋');
   const [selectedColor, setSelectedColor] = useState('bg-gray-500');
   
-  // Local state for optimistic updates during drag
-  const [optimisticLeads, setOptimisticLeads] = useState<Lead[]>([]);
-
   // Available emojis for stages
   const availableEmojis = ['🆕', '📞', '💬', '📄', '💰', '✅', '🤝', '📊', '🎯', '⭐', '🚀', '💡', '📈', '🔥', '💪', '👍'];
   
@@ -66,18 +63,13 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
     setStages(loadedStages);
     onStagesChange?.(loadedStages);
   }, [customerId]);
-  
-  // Sync optimistic leads with actual leads
-  useEffect(() => {
-    setOptimisticLeads(leads);
-  }, [leads]);
 
-  // Group leads by stage - use optimistic leads for instant updates
+  // Group leads by stage - use leads prop directly since parent updates instantly
   const leadsByStage = useMemo(() => {
     const grouped: Record<string, Lead[]> = {};
     
     stages.forEach(stage => {
-      grouped[stage.id] = optimisticLeads.filter(lead => {
+      grouped[stage.id] = leads.filter(lead => {
         // Check if lead status matches stage ID directly
         if (lead.status === stage.id) {
           return true;
@@ -89,12 +81,13 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
     });
     
     return grouped;
-  }, [optimisticLeads, stages]);
+  }, [leads, stages]);
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
     const { destination, source, draggableId } = result;
 
+    // If no destination or same position, do nothing
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
@@ -103,16 +96,7 @@ export function PipelineBoard({ leads, customerId, onLeadUpdate, onStagesChange 
 
     console.log('🎯 Drag & Drop:', { leadId, from: source.droppableId, to: newStageId });
 
-    // Optimistic update - update local state immediately
-    setOptimisticLeads(prevLeads => 
-      prevLeads.map(lead => 
-        lead.id === leadId 
-          ? { ...lead, status: newStageId as any, updatedAt: new Date() }
-          : lead
-      )
-    );
-
-    // Update parent component (will update backend/sheet)
+    // Update parent component (will instantly update leads prop and trigger re-render)
     onLeadUpdate(leadId, {
       status: newStageId as any,
       updatedAt: new Date()

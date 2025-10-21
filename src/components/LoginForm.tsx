@@ -11,6 +11,7 @@ import {
   EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../lib/auth';
+import { ADMIN_CONFIG } from '@/config/admin';
 
 interface LoginFormProps {
   onBack: () => void;
@@ -224,13 +225,15 @@ export function LoginForm({ onBack, onSwitchToRegister, onSwitchToGuest, onSucce
             </form>
 
             {/* Demo Info */}
-            <div className="mt-6 p-4 bg-blue-500/20 border border-blue-500/30 rounded-xl">
-              <p className="text-blue-300 text-sm text-center">
-                <strong>Demo account:</strong><br />
-                Email: demo@warmeleads.eu<br />
-                Wachtwoord: demo123
-              </p>
-            </div>
+            {ADMIN_CONFIG.demoAccount && (
+              <div className="mt-6 p-4 bg-blue-500/20 border border-blue-500/30 rounded-xl">
+                <p className="text-blue-300 text-sm text-center">
+                  <strong>Demo account:</strong><br />
+                  Email: {ADMIN_CONFIG.demoAccount.email}<br />
+                  Wachtwoord: {ADMIN_CONFIG.demoAccount.password}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Action Links */}

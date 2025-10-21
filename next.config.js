@@ -38,6 +38,28 @@ const nextConfig = {
     return config;
   },
   
+  // Redirects for SEO - old URLs to new structure
+  async redirects() {
+    const redirects = [];
+    
+    // Old city-specific URLs to new structure
+    const oldCityUrls = [
+      { from: 'leads-thuisbatterijen-amsterdam', to: 'leads/thuisbatterijen/amsterdam' },
+      { from: 'leads-zonnepanelen-rotterdam', to: 'leads/zonnepanelen/rotterdam' },
+      { from: 'leads-warmtepompen-utrecht', to: 'leads/warmtepompen/utrecht' },
+    ];
+    
+    oldCityUrls.forEach(({ from, to }) => {
+      redirects.push({
+        source: `/${from}`,
+        destination: `/${to}`,
+        permanent: true,
+      });
+    });
+    
+    return redirects;
+  },
+  
   // Security headers to prevent SSL warnings on mobile
   async headers() {
     return [
