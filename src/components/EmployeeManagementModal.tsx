@@ -142,10 +142,14 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     const employee = company?.employees.find(emp => emp.email === employeeEmail);
     const employeeName = employee?.name || employeeEmail;
     
+    console.log('🗑️ Delete button clicked for:', { employeeEmail, employeeName, ownerEmail: user.email });
+    
     if (!confirm(`Weet je zeker dat je ${employeeName} (${employeeEmail}) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
+      console.log('🗑️ Delete cancelled by user');
       return;
     }
 
+    console.log('🗑️ Delete confirmed by user, starting deletion...');
     setIsLoading(true);
     setError(null);
     setSuccess(null);
@@ -153,35 +157,47 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     try {
       console.log('🗑️ Attempting to delete employee:', { ownerEmail: user.email, employeeEmail });
       
-      const response = await fetch(
-        `/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&employeeEmail=${encodeURIComponent(employeeEmail)}`,
-        { method: 'DELETE' }
-      );
+      const deleteUrl = `/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&employeeEmail=${encodeURIComponent(employeeEmail)}`;
+      console.log('🗑️ Delete URL:', deleteUrl);
+      
+      const response = await fetch(deleteUrl, { method: 'DELETE' });
 
       console.log('🗑️ Delete response status:', response.status);
+      console.log('🗑️ Delete response ok:', response.ok);
+      
       const result = await response.json();
       console.log('🗑️ Delete response result:', result);
 
       if (response.ok && result.success) {
-        // Show success message first
-        setSuccess(`${employeeName} is succesvol verwijderd uit het team.`);
-        console.log('✅ Employee deletion successful, reloading data...');
+        console.log('✅ Employee deletion successful, showing success message...');
+        
+        // Show success message immediately
+        const successMessage = `${employeeName} is succesvol verwijderd uit het team.`;
+        setSuccess(successMessage);
+        console.log('✅ Success message set:', successMessage);
         
         // Reload company data to update the UI (without clearing success message)
+        console.log('🔄 Reloading company data...');
         await loadCompanyData(false);
+        console.log('✅ Company data reloaded');
         
         // Clear success message after 5 seconds
         setTimeout(() => {
+          console.log('⏰ Clearing success message');
           setSuccess(null);
         }, 5000);
       } else {
-        console.error('❌ Delete failed:', result);
-        setError(result.error || 'Fout bij het verwijderen van werknemer');
+        console.error('❌ Delete failed:', { status: response.status, result });
+        const errorMessage = result.error || 'Fout bij het verwijderen van werknemer';
+        setError(errorMessage);
+        console.error('❌ Error message set:', errorMessage);
       }
     } catch (err) {
       console.error('❌ Delete error:', err);
-      setError('Fout bij het verwijderen van werknemer');
+      const errorMessage = 'Fout bij het verwijderen van werknemer';
+      setError(errorMessage);
     } finally {
+      console.log('🗑️ Delete operation finished, setting loading to false');
       setIsLoading(false);
     }
   };
