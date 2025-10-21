@@ -2,9 +2,16 @@
 
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 export function FloatingWhatsAppButton() {
   const [isHovered, setIsHovered] = useState(false);
+  const pathname = usePathname();
+  
+  // Hide WhatsApp button on admin pages
+  if (pathname?.startsWith('/admin')) {
+    return null;
+  }
   const whatsappNumber = '31613927338'; // +31 61 392 7338
   const defaultMessage = 'Hoi! Ik heb interesse in WarmeLeads en zou graag meer informatie ontvangen.';
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(defaultMessage)}`;
