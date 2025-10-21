@@ -280,19 +280,30 @@ export async function DELETE(request: NextRequest) {
 
       const companyData = await response.json();
 
-      // Remove employee from company data
+      // Remove employee from company data with case-insensitive comparison
       const initialLength = companyData.employees?.length || 0;
-      const filteredEmployees = companyData.employees.filter(
-        (emp: EmployeeAccount) => emp.email !== employeeEmail
-      );
       
-      console.log('🗑️ Employee removal:', { 
+      console.log('🔍 Before filtering - All employees:', companyData.employees?.map((emp: EmployeeAccount) => ({
+        email: emp.email,
+        name: emp.name,
+        targetEmail: employeeEmail,
+        exactMatch: emp.email === employeeEmail,
+        caseInsensitiveMatch: emp.email.toLowerCase() === employeeEmail.toLowerCase()
+      })));
+      
+      const filteredEmployees = companyData.employees.filter((emp: EmployeeAccount) => {
+        const isMatch = emp.email.toLowerCase() === employeeEmail.toLowerCase();
+        console.log(`🔍 Checking ${emp.email} against ${employeeEmail}: ${isMatch ? 'MATCH - WILL REMOVE' : 'NO MATCH - KEEP'}`);
+        return !isMatch;
+      });
+      
+      console.log('🗑️ Employee removal result:', { 
         initialLength, 
         newLength: filteredEmployees.length,
         removed: initialLength - filteredEmployees.length,
         targetEmail: employeeEmail,
-        beforeFilter: companyData.employees?.map((emp: any) => emp.email),
-        afterFilter: filteredEmployees.map((emp: any) => emp.email)
+        beforeFilter: companyData.employees?.map((emp: EmployeeAccount) => emp.email),
+        afterFilter: filteredEmployees.map((emp: EmployeeAccount) => emp.email)
       });
 
       // Update the company data with filtered employees
@@ -303,7 +314,7 @@ export async function DELETE(request: NextRequest) {
       console.log('💾 Saving updated company data:', {
         blobKey,
         employeeCount: companyData.employees?.length || 0,
-        remainingEmails: companyData.employees?.map((emp: any) => emp.email) || []
+        remainingEmails: companyData.employees?.map((emp: EmployeeAccount) => emp.email) || []
       });
       
       await put(blobKey, updatedDataString, {
@@ -314,25 +325,46 @@ export async function DELETE(request: NextRequest) {
       
       // Verify the save operation was successful by reading it back
       try {
-        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure write is complete
+        await new Promise(resolve => setTimeout(resolve, 500)); // Longer delay to ensure write is complete
         
-        const verifyResponse = await fetch(blobs[0].url, {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
+        // Re-fetch the blob to get the latest URL (avoid caching issues)
+        const { blobs: verifyBlobs } = await list({
+          prefix: blobKey,
+          token: process.env.BLOB_READ_WRITE_TOKEN
         });
         
-        if (verifyResponse.ok) {
-          const verifyData = await verifyResponse.json();
-          const verifyCount = verifyData.employees?.length || 0;
-          const expectedCount = companyData.employees?.length || 0;
+        if (verifyBlobs.length > 0) {
+          const verifyResponse = await fetch(verifyBlobs[0].url, {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
           
-          if (verifyCount !== expectedCount) {
-            console.warn('⚠️ Verification failed: employee count mismatch', {
-              expected: expectedCount,
-              actual: verifyCount
+          if (verifyResponse.ok) {
+            const verifyData = await verifyResponse.json();
+            const verifyCount = verifyData.employees?.length || 0;
+            const expectedCount = companyData.employees?.length || 0;
+            const remainingEmails = verifyData.employees?.map((emp: EmployeeAccount) => emp.email) || [];
+            
+            console.log('🔍 Verification result:', {
+              expectedCount,
+              actualCount: verifyCount,
+              expectedEmails: companyData.employees?.map((emp: EmployeeAccount) => emp.email) || [],
+              actualEmails: remainingEmails,
+              targetEmailStillExists: remainingEmails.includes(employeeEmail),
+              caseInsensitiveTargetExists: remainingEmails.some((email: string) => email.toLowerCase() === employeeEmail.toLowerCase())
             });
+            
+            // Check if target email still exists (including case variations)
+            const targetStillExists = remainingEmails.some((email: string) => email.toLowerCase() === employeeEmail.toLowerCase());
+            if (targetStillExists) {
+              console.error('❌ Target email still exists in blob storage after deletion!', {
+                targetEmail: employeeEmail,
+                remainingEmails,
+                foundVariations: remainingEmails.filter((email: string) => email.toLowerCase() === employeeEmail.toLowerCase())
+              });
+            }
           }
         }
       } catch (verifyError) {
