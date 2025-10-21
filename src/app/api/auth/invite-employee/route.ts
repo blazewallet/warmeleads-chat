@@ -146,8 +146,8 @@ export async function POST(request: NextRequest) {
       console.log('Could not fetch owner name:', error);
     }
 
-    // Send invitation email
-    const loginUrl = `${request.nextUrl.origin}/portal`;
+    // Send invitation email with setup parameters
+    const loginUrl = `${request.nextUrl.origin}/portal?email=${encodeURIComponent(employeeEmail)}&setup=true`;
     const emailSent = await sendEmployeeInvitationEmail({
       employeeName,
       employeeEmail,

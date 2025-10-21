@@ -427,16 +427,16 @@ function generateEmployeeInvitationHTML(data: EmployeeInvitationEmailData): stri
       <!-- Login Button -->
       <div style="text-align: center; margin: 32px 0;">
         <a href="${data.loginUrl}" style="display: inline-block; background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%); color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3);">
-          🚀 Inloggen op Portal
+          🚀 Account aanmaken
         </a>
       </div>
       
-      <!-- Login Instructions -->
+      <!-- Setup Instructions -->
       <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 12px; padding: 24px; margin: 24px 0;">
-        <h3 style="color: #ffffff; margin: 0 0 12px 0; font-size: 18px;">🔑 Wat gebeurt er bij inloggen?</h3>
+        <h3 style="color: #ffffff; margin: 0 0 12px 0; font-size: 18px;">🔑 Wat gebeurt er bij account aanmaken?</h3>
         <ul style="color: #ffffff; margin: 0; padding-left: 20px; line-height: 1.8;">
-          <li>U wordt doorgestuurd naar het inlogscherm</li>
-          <li>Voer uw email adres in: <strong>${data.employeeEmail}</strong></li>
+          <li>U wordt direct naar het portal geleid</li>
+          <li>Uw email is al ingevuld: <strong>${data.employeeEmail}</strong></li>
           <li>U wordt gevraagd uw wachtwoord in te stellen</li>
           <li>Na het instellen heeft u direct toegang tot alle leads</li>
         </ul>
@@ -482,11 +482,11 @@ WAT KUNT U DOEN IN HET PORTAL?
 - Contactgegevens van potentiële klanten beheren
 - Resultaten en statistieken volgen
 
-INLOGGEN:
-Ga naar: ${data.loginUrl}
+ACCOUNT AANMAKEN:
+Klik op de knop in de email of ga naar: ${data.loginUrl}
 
-VOOR HET EERSTE INLOGGEN:
-1. Voer uw email adres in: ${data.employeeEmail}
+VOOR HET EERSTE GEBRUIK:
+1. Uw email is al ingevuld: ${data.employeeEmail}
 2. U wordt gevraagd uw wachtwoord in te stellen
 3. Na het instellen heeft u direct toegang tot alle leads
 

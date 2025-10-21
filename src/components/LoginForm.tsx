@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   ArrowLeftIcon,
@@ -33,11 +33,26 @@ export function LoginForm({ onBack, onSwitchToRegister, onSwitchToGuest, onSucce
 
   const { login, register, isLoading, error, clearError, setupPassword, needsPasswordSetup, passwordSetupEmail } = useAuthStore();
 
+  // Auto-fill email when password setup is needed
+  useEffect(() => {
+    if (needsPasswordSetup && passwordSetupEmail && !formData.email) {
+      setFormData(prev => ({ ...prev, email: passwordSetupEmail }));
+      setIsLogin(false); // Switch to registration-like view for password setup
+    }
+  }, [needsPasswordSetup, passwordSetupEmail, formData.email]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
 
     try {
+      // Check if we're in password setup mode first
+      if (needsPasswordSetup && passwordSetupEmail) {
+        await setupPassword(passwordSetupEmail, formData.password);
+        onSuccess();
+        return;
+      }
+
       if (isLogin) {
         await login(formData.email, formData.password);
       } else {

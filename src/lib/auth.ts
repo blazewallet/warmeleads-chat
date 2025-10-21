@@ -54,6 +54,7 @@ export interface AuthState {
   updateProfile: (updates: Partial<User>) => void;
   createAccountFromGuest: (userData: RegisterData) => Promise<void>;
   setupPassword: (email: string, password: string) => Promise<void>;
+  initiatePasswordSetup: (email: string) => void;
   clearError: () => void;
   clearPasswordSetup: () => void;
   init: () => void;
@@ -653,6 +654,18 @@ export const useAuthStore = create<AuthState>()(
           });
           throw error;
         }
+      },
+
+      initiatePasswordSetup: (email: string) => {
+        authState.needsPasswordSetup = true;
+        authState.passwordSetupEmail = email;
+        set({ 
+          needsPasswordSetup: true, 
+          passwordSetupEmail: email,
+          error: null,
+          isLoading: false,
+        });
+        console.log('🔑 Initiating password setup directly for:', email);
       },
 
       clearPasswordSetup: () => {
