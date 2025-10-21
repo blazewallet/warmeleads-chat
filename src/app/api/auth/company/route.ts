@@ -250,26 +250,41 @@ export async function DELETE(request: NextRequest) {
 
       // Remove employee from company data
       const initialLength = companyData.employees?.length || 0;
-      companyData.employees = companyData.employees.filter(
+      const filteredEmployees = companyData.employees.filter(
         (emp: any) => emp.email !== employeeEmail
       );
-      const newLength = companyData.employees?.length || 0;
       
       console.log('🗑️ Employee removal:', { 
         initialLength, 
-        newLength, 
-        removed: initialLength - newLength,
-        targetEmail: employeeEmail
+        newLength: filteredEmployees.length,
+        removed: initialLength - filteredEmployees.length,
+        targetEmail: employeeEmail,
+        beforeFilter: companyData.employees?.map((emp: any) => emp.email),
+        afterFilter: filteredEmployees.map((emp: any) => emp.email)
       });
 
+      // Update the company data with filtered employees
+      companyData.employees = filteredEmployees;
+
       // Save updated company data
-      await put(blobKey, JSON.stringify(companyData, null, 2), {
+      const updatedDataString = JSON.stringify(companyData, null, 2);
+      console.log('💾 Saving updated company data:', {
+        blobKey,
+        employeeCount: companyData.employees?.length || 0,
+        remainingEmails: companyData.employees?.map((emp: any) => emp.email) || []
+      });
+      
+      await put(blobKey, updatedDataString, {
         access: 'public',
         token: process.env.BLOB_READ_WRITE_TOKEN,
         allowOverwrite: true,
       });
       
-      console.log('💾 Company data saved to blob storage');
+      console.log('💾 Company data saved to blob storage successfully');
+      console.log('🔍 Final company data:', {
+        employeesCount: companyData.employees?.length || 0,
+        employees: companyData.employees?.map((emp: any) => ({ name: emp.name, email: emp.email })) || []
+      });
 
       // Also remove the employee account from auth-accounts
       const employeeBlobKey = `auth-accounts/${employeeEmail.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;

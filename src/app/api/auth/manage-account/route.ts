@@ -25,11 +25,11 @@ export async function POST(request: NextRequest) {
     });
     
     console.log(`📦 Found ${blobs.length} accounts in Blob Storage`);
-    console.log('📋 Looking for:', `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_')}.json`);
+    console.log('📋 Looking for:', `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_dot_')}.json`);
     
     if (action === 'delete') {
-      // Find and delete the user blob
-      const emailPath = `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_')}.json`;
+      // Find and delete the user blob - use consistent formatting
+      const emailPath = `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
       const userBlob = blobs.find(blob => blob.pathname === emailPath);
       
       if (userBlob) {
@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'activate' || action === 'deactivate') {
-      // Find the user blob
-      const emailPath = `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_')}.json`;
+      // Find the user blob - use consistent formatting
+      const emailPath = `auth-accounts/${email.replace('@', '_at_').replace(/\./g, '_dot_')}.json`;
       const userBlob = blobs.find(blob => blob.pathname === emailPath);
       
       if (!userBlob) {

@@ -169,17 +169,35 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
       console.log('🗑️ Delete response result:', result);
 
       if (response.ok && result.success) {
-        console.log('✅ Employee deletion successful, showing success message...');
+        console.log('✅ Employee deletion successful, updating UI...');
         
-        // Show success message immediately
+        // Immediately update the local state to remove the employee from UI
+        if (company) {
+          const updatedCompany = {
+            ...company,
+            employees: company.employees.filter(emp => emp.email !== employeeEmail)
+          };
+          setCompany(updatedCompany);
+          console.log('✅ Local UI updated immediately:', { 
+            beforeCount: company.employees.length, 
+            afterCount: updatedCompany.employees.length 
+          });
+        }
+        
+        // Show success message
         const successMessage = `${employeeName} is succesvol verwijderd uit het team.`;
         setSuccess(successMessage);
         console.log('✅ Success message set:', successMessage);
         
-        // Reload company data to update the UI (without clearing success message)
-        console.log('🔄 Reloading company data...');
-        await loadCompanyData(false);
-        console.log('✅ Company data reloaded');
+        // Reload company data in background to ensure sync (without clearing success message)
+        console.log('🔄 Reloading company data in background...');
+        try {
+          await loadCompanyData(false);
+          console.log('✅ Background company data reload completed');
+        } catch (reloadError) {
+          console.warn('⚠️ Background reload failed, but UI was already updated:', reloadError);
+          // UI is already updated, so don't show error to user
+        }
         
         // Clear success message after 5 seconds
         setTimeout(() => {
