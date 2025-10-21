@@ -55,17 +55,25 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      const response = await fetch(blobs[0].url);
+      // Fetch with cache-busting to ensure fresh data
+      const response = await fetch(blobs[0].url, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
       if (!response.ok) {
         throw new Error('Failed to fetch company data');
       }
 
       const companyData = await response.json();
       
-      console.log('📋 Company data loaded:', { 
+      console.log('📋 Fresh company data fetched:', { 
         ownerEmail, 
         totalEmployees: companyData.employees?.length || 0,
-        employeeEmails: companyData.employees?.map((emp: any) => emp.email) || []
+        employeeEmails: companyData.employees?.map((emp: any) => emp.email) || [],
+        timestamp: new Date().toISOString()
       });
 
       return NextResponse.json({

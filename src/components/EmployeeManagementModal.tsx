@@ -53,9 +53,10 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     }
   });
 
-  // Load company data when modal opens
+  // Load company data when modal opens - always fetch fresh data
   useEffect(() => {
     if (isOpen && user?.email) {
+      console.log('🔄 Modal opened, loading fresh company data for:', user.email);
       loadCompanyData();
     }
   }, [isOpen, user?.email]);
@@ -68,15 +69,51 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
     }
     
     try {
-      console.log('🔄 Loading company data for:', user.email);
-      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}`);
+      console.log('🔄 Loading company data for:', user.email, 'at', new Date().toISOString());
+      
+      // Add cache-busting parameter to force fresh data
+      const cacheBuster = `t=${Date.now()}`;
+      const response = await fetch(`/api/auth/company?ownerEmail=${encodeURIComponent(user.email)}&${cacheBuster}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
       const data = await response.json();
       
-      console.log('🔄 Company data response:', { ok: response.ok, success: data.success, employees: data.company?.employees?.length });
+      console.log('🔄 Company data response:', { 
+        ok: response.ok, 
+        success: data.success, 
+        employees: data.company?.employees?.length,
+        timestamp: new Date().toISOString()
+      });
       
       if (response.ok && data.success) {
-        setCompany(data.company);
-        console.log('✅ Company data loaded:', { employees: data.company?.employees });
+        // Only update state if we have fresh data that's different from current state
+        const newEmployeeCount = data.company?.employees?.length || 0;
+        const currentEmployeeCount = company?.employees?.length || 0;
+        const newEmployeeEmails = data.company?.employees?.map((emp: any) => emp.email) || [];
+        const currentEmployeeEmails = company?.employees?.map((emp: any) => emp.email) || [];
+        
+        // Check if the employee data has actually changed
+        const hasChanged = newEmployeeCount !== currentEmployeeCount || 
+          !newEmployeeEmails.every((email, index) => email === currentEmployeeEmails[index]);
+        
+        if (hasChanged || !company) {
+          setCompany(data.company);
+          console.log('✅ Company data updated:', { 
+            oldCount: currentEmployeeCount,
+            newCount: newEmployeeCount,
+            oldEmails: currentEmployeeEmails,
+            newEmails: newEmployeeEmails
+          });
+        } else {
+          console.log('✅ Company data unchanged, no state update needed:', { 
+            employeeCount: newEmployeeCount,
+            employeeEmails: newEmployeeEmails
+          });
+        }
       } else {
         setError(data.error || 'Fout bij het laden van bedrijfsgegevens');
       }
@@ -114,8 +151,12 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
       const result = await response.json();
 
       if (response.ok && result.success) {
-        // Reload company data to show new employee
-        await loadCompanyData();
+        console.log('✅ Employee invitation successful, reloading data...');
+        
+        // Show immediate feedback and reload company data to show new employee
+        setSuccess(`${inviteData.name} is succesvol uitgenodigd!`);
+        await loadCompanyData(false); // Don't clear the success message
+        
         setShowInviteForm(false);
         setInviteData({
           email: '',
@@ -127,6 +168,11 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
             canCheckout: false,
           }
         });
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          setSuccess(null);
+        }, 5000);
       } else {
         setError(result.error || 'Fout bij het uitnodigen van werknemer');
       }
@@ -192,11 +238,14 @@ export function EmployeeManagementModal({ isOpen, onClose, user }: EmployeeManag
         // Reload company data in background to ensure sync (without clearing success message)
         console.log('🔄 Reloading company data in background...');
         try {
+          setIsLoading(true); // Show loading while refreshing
           await loadCompanyData(false);
           console.log('✅ Background company data reload completed');
         } catch (reloadError) {
           console.warn('⚠️ Background reload failed, but UI was already updated:', reloadError);
           // UI is already updated, so don't show error to user
+        } finally {
+          setIsLoading(false);
         }
         
         // Clear success message after 5 seconds
