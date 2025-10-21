@@ -735,29 +735,6 @@ export function CustomerPortal({ onBackToHome, onStartChat }: CustomerPortalProp
           )}
         </motion.div>
 
-        {/* Reorder CTA */}
-        <motion.div
-          className="bg-gradient-to-r from-brand-pink/20 to-brand-orange/20 rounded-2xl p-6 border border-brand-pink/30 text-center"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <h3 className="text-white font-bold text-xl mb-2">
-            Klaar voor meer leads? 🚀
-          </h3>
-          <p className="text-white/80 mb-4">
-            Gebaseerd op uw geschiedenis raden we aan: meer exclusieve thuisbatterij leads
-          </p>
-          <motion.button
-            onClick={onStartChat}
-            className="chat-button inline-flex items-center space-x-2"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <PlusIcon className="w-5 h-5" />
-            <span>Nieuwe Bestelling via Lisa</span>
-          </motion.button>
-        </motion.div>
 
         {/* Leads section removed - now on dedicated page */}
       </div>
